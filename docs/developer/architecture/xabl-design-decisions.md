@@ -256,6 +256,104 @@ Studio must include:
 - First-class events/event handlers are supported.
 - Capability-based permissions apply to scripts, extensions, packages, jobs, filesystem/network/process access, databases, secrets, and deployments.
 
+
+## UI, Designer, and Report Model
+
+- Forms use a platform-neutral XABL UI definition rather than being tied directly to Qt or any one renderer.
+- The same XABL form model can be rendered by desktop, web, terminal/TUI, and future targets where practical.
+- Legacy form import should translate into the stable XABL form model instead of binding imported forms directly to a platform toolkit.
+- Reports use a platform-neutral XABL report definition.
+- Report definitions can render to preview, printer, PDF, HTML, and other suitable outputs through renderer backends.
+- XABL owns report semantics, compatibility behaviour, pagination rules, data binding, and report designer behaviour.
+- Mature third-party rendering/layout/PDF/font/printing libraries may be used underneath only when licence-compatible with GPL-3.0-or-later and the XABL distribution model.
+- Project files, forms, reports, menus, and other designer assets should be plain text wherever practical.
+- Human readability is a hard requirement: favour shallow structures, meaningful names, minimal ceremony, and formats that are easy to navigate and edit manually.
+- TOML is preferred for project/configuration metadata.
+- Designer assets should use a simple XABL-native declarative text format rather than complex, deeply nested, or noisy serialization.
+- JSON should not be the default hand-maintained project/designer format unless interoperability strongly justifies it.
+- Designer files remain primarily declarative.
+- Executable event-handler logic normally lives in .xabl source files and is referenced by name from designer definitions.
+- Small declarative expressions may remain embedded in designer definitions where useful.
+
+## Native Extension Boundary
+
+- Ordinary XABL modules are preferred over native extensions whenever possible.
+- Native extensions use a stable C ABI rather than a C++ ABI.
+- Trusted first-party native modules may run in-process where appropriate.
+- Higher-risk or third-party native extensions may be isolated out-of-process.
+- Extension trust, signature, provenance, and capability policy applies equally to native and non-native modules.
+
+## Server and Web Execution Model
+
+- XABL Server supports both straightforward synchronous request handlers and async/background execution.
+- Simple request/response handlers should remain simple and should not require an elaborate concurrency model.
+- Async APIs, queues, scheduled jobs, workers, and background tasks are available when an application needs them.
+- XABL Web supports both server-rendered applications and richer browser-side applications.
+- Server-rendered behaviour is the simpler/default path.
+- Browser-side JavaScript and/or WebAssembly may be used when richer client-side behaviour genuinely helps.
+- The web model should preserve XABL application structure and language semantics rather than forcing users into a separate unrelated framework.
+
+## Bytecode and Runtime Compatibility
+
+- XABL bytecode is versioned and documented.
+- The bytecode format may evolve and is not frozen forever.
+- Studio/runtime must detect bytecode versions and either execute them within the supported window, upgrade them safely, or select an appropriate older runtime/environment.
+- Historical runtime versions are retained in the archive/package system so old applications can request the exact runtime they were built and tested against.
+- Studio automatically selects the runtime and compatibility environment declared by a project's manifest/lockfile.
+- Multiple XABL runtimes can coexist side-by-side on the same machine.
+- Studio itself should be decoupled from a project's runtime version so newer Studio versions can manage older projects without forcing upgrades.
+- Dependency resolution is per project.
+- Multiple versions of the same dependency may coexist when different projects require them.
+- Project-local package/extension installation is the default.
+- Global installation is reserved for genuinely shared tooling such as Studio integrations, SDKs, or user-wide utilities.
+- Projects may vendor dependencies directly for archival, offline, air-gapped, or high-assurance use.
+
+## Release and Backward-Compatibility Policy
+
+- XABL has an LTS release track alongside normal releases.
+- LTS releases receive longer security, compatibility, and runtime support.
+- Backward compatibility is a core design constraint.
+- XABL should avoid breaking existing source, bytecode, project files, data formats, designer files, extensions, and runtime behaviour wherever technically possible.
+- Patch releases must not intentionally introduce breaking changes.
+- Minor releases should remain source-compatible by default.
+- Major releases may only introduce breaking changes as a last resort, after deprecation, compatibility shims, migration tooling, and preservation of older runtimes have been considered.
+- Legacy compatibility profiles are even more conservative than modern XABL itself.
+- Once legacy behaviour is implemented and validated, later releases must not silently reinterpret it.
+- Historical runtimes, modules, and environment definitions should remain retrievable for long-term reproducibility.
+
+## Security, Trust, and Permissions
+
+- Package and extension manifests declare required capabilities up front.
+- Capabilities may include filesystem access, network access, process execution, database access, native code, secrets access, and other privileged operations.
+- Studio/runtime should enforce declared permissions wherever practical.
+- Permissions are scoped per project rather than being only global machine/user switches.
+- Projects declare what they need; users approve those capabilities locally.
+- XABL supports a restricted legacy mode for old applications, allowing risky behaviours to be contained without rewriting original source.
+- Unknown legacy projects open restricted by default until explicitly trusted.
+- Trust state should be clearly visible in Studio.
+- Signed projects and signed release artifacts are supported.
+- Signing may apply to projects, packages, bytecode bundles, archival snapshots, and application builds where appropriate.
+
+## Compatibility Certification and Upgrade Safety
+
+- Each supported legacy dialect/profile has a formal compatibility certification suite.
+- Certification suites cover syntax, runtime behaviour, data/index/memo handling, locking, errors, forms/reports where practical, and historical quirks.
+- Compatibility claims are evidence-based and measurable.
+- Compatibility results are published publicly by release/profile, including test coverage, pass rates, known limitations, and regressions.
+- Studio includes a per-project compatibility dashboard showing legacy dependencies, active shims, file formats, runtime/profile versions, test status, and upgrade risks.
+- Studio can snapshot a project's compatibility state before runtime/module/profile upgrades.
+- After upgrade, XABL can rerun compatibility baselines and compare behaviour automatically.
+
+## Dependency Governance and Supply Chain
+
+- Every third-party dependency must have recorded licence, source/provenance, version, and licence-compatibility assessment before entering the core build.
+- Official XABL releases should be reproducible builds wherever the target platform allows it.
+- Release builds pin toolchains, dependencies, and build inputs.
+- Where byte-for-byte reproducibility is not practical, the full build inputs and environment must still be traceable.
+- Official releases include a Software Bill of Materials (SBOM) covering bundled libraries, modules, versions, licences, and provenance.
+- Official builds include provenance/attestation metadata tying artifacts to source commit, toolchain, CI workflow, dependency set, and build environment.
+- Official XABL release artifacts must be signed, including binaries, installers/packages, container images, SDK/runtime archives, and other official distribution outputs.
+
 ## Documentation
 
 - Brierfield Labs attribution throughout.
