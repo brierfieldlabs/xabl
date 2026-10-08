@@ -222,6 +222,17 @@ Studio must include:
 
 ## Runtime, Tooling, and Application Targets
 
+- XABL owns the language front end, compatibility semantics, intermediate representation/bytecode, virtual machine, runtime behaviour, and debugger.
+- LLVM is the native-code generation backend for release/native builds.
+- LLVM is used as a code-generation engine only; it does not define XABL language semantics.
+- Development/debugging may favour the XABL VM/bytecode path for fast iteration, debugging, hot reload, sandboxing, and faithful compatibility behaviour.
+- Native builds use LLVM optimisation/code generation for high-performance Windows/Linux binaries and future ARM64 support.
+- Docker/OCI containers are an official XABL deployment target.
+- Official container families should include minimal runtime, server, and SDK/build images.
+- Preferred registry is GitHub Container Registry under ghcr.io/brierfieldlabs/.
+- Project manifests/lockfiles should allow containers to reconstruct the exact required XABL runtime, compatibility modules, drivers, and extensions.
+- OCI compatibility should allow use with Docker, Podman, Kubernetes, CI systems, and other standards-compatible runtimes.
+- Multi-architecture images should support amd64 from the outset and arm64 when the runtime is ready.
 - Implementation language: C++23.
 - UI: Qt 6, Qt Widgets first.
 - CMake + Ninja.
