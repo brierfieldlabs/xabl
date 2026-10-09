@@ -45,3 +45,7 @@ add_test(
 )
 
 set_tests_properties(xabl_smoke PROPERTIES DEPENDS xabl_fixture_generate)
+
+add_executable(xabl_expression_tests tests/test_expressions.cpp)
+target_link_libraries(xabl_expression_tests PRIVATE xabl_core)
+add_test(NAME xabl_expressions COMMAND xabl_expression_tests)
