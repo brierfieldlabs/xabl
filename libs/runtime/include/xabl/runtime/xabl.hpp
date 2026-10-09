@@ -63,6 +63,7 @@ enum class OpCode {
     Equal,
     Jump,
     JumpIfFalse,
+    SetFound,
     CallEof,
     CallBof,
     CallFound,

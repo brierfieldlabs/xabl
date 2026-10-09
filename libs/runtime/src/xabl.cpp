@@ -343,6 +343,50 @@ Program Compiler::compile(std::string_view source) const {
     std::istringstream input{std::string(source)};
     std::string raw_line;
     std::size_t line_number = 0;
+    std::string last_locate_expression;
+
+    const auto emit_locate = [&](const std::string& condition, bool continue_search) {
+        if (continue_search) {
+            program.code.push_back({OpCode::PushLiteral, Value(1.0)});
+            program.code.push_back({OpCode::Skip});
+        } else {
+            program.code.push_back({OpCode::GoTop});
+        }
+
+        const std::size_t loop_start = program.code.size();
+
+        program.code.push_back({OpCode::CallEof});
+        const std::size_t not_eof_jump = program.code.size();
+        program.code.push_back({OpCode::JumpIfFalse});
+
+        program.code.push_back({OpCode::PushLiteral, Value(false)});
+        program.code.push_back({OpCode::SetFound});
+        const std::size_t eof_jump = program.code.size();
+        program.code.push_back({OpCode::Jump});
+
+        const std::size_t test_position = program.code.size();
+        program.code[not_eof_jump].target = test_position;
+
+        expression_compiler.emit(condition);
+        const std::size_t miss_jump = program.code.size();
+        program.code.push_back({OpCode::JumpIfFalse});
+
+        program.code.push_back({OpCode::PushLiteral, Value(true)});
+        program.code.push_back({OpCode::SetFound});
+        const std::size_t found_jump = program.code.size();
+        program.code.push_back({OpCode::Jump});
+
+        const std::size_t miss_position = program.code.size();
+        program.code[miss_jump].target = miss_position;
+
+        program.code.push_back({OpCode::PushLiteral, Value(1.0)});
+        program.code.push_back({OpCode::Skip});
+        program.code.push_back({OpCode::Jump, {}, {}, loop_start});
+
+        const std::size_t end = program.code.size();
+        program.code[eof_jump].target = end;
+        program.code[found_jump].target = end;
+    };
 
     while (std::getline(input, raw_line)) {
         ++line_number;
@@ -386,6 +430,23 @@ Program Compiler::compile(std::string_view source) const {
             if (starts_with_ci(line, "SEEK ")) {
                 expression_compiler.emit(line.substr(5));
                 program.code.push_back({OpCode::Seek});
+                continue;
+            }
+
+            if (starts_with_ci(line, "LOCATE FOR ")) {
+                last_locate_expression = trim(line.substr(11));
+                if (last_locate_expression.empty()) {
+                    throw std::runtime_error("LOCATE FOR requires an expression");
+                }
+                emit_locate(last_locate_expression, false);
+                continue;
+            }
+
+            if (equal_ci(line, "CONTINUE")) {
+                if (last_locate_expression.empty()) {
+                    throw std::runtime_error("CONTINUE without a preceding LOCATE FOR");
+                }
+                emit_locate(last_locate_expression, true);
                 continue;
             }
 
@@ -736,8 +797,7 @@ void DbfTable::load() {
             throw std::runtime_error("truncated DBF record data");
         }
 
-        // Preserve physical records exactly, including the deletion marker.
-        // dBASE record numbers and NDX record pointers refer to physical rows.
+        // Preserve physical records exactly, including the deletion marker.        // dBASE record numbers and NDX record pointers refer to physical rows.
         records_.push_back(std::move(record));
     }
 }
@@ -1182,6 +1242,11 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
 
         case OpCode::JumpIfFalse:
             ip = pop().as_logical() ? ip + 1 : instruction.target;
+            break;
+
+        case OpCode::SetFound:
+            active_work_area().found = pop().as_logical();
+            ++ip;
             break;
 
         case OpCode::CallEof: {

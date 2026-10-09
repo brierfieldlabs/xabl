@@ -141,6 +141,27 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        const xabl::Program locate_program =
+            compiler.compile(read_text(fixtures / "legacy-locate.prg"));
+
+        std::ostringstream locate_output;
+        xabl::Vm locate_vm(locate_output);
+        locate_vm.run(locate_program, fixtures);
+
+        const std::string expected_locate =
+            ".T.\n"
+            "Alice\n"
+            ".T.\n"
+            "Charlie\n"
+            ".F.\n"
+            ".T.\n";
+
+        if (locate_output.str() != expected_locate) {
+            std::cerr << "unexpected LOCATE output\nExpected:\n"
+                      << expected_locate << "Actual:\n" << locate_output.str();
+            return 1;
+        }
+
         std::cout << "XABL smoke test passed\n";
         return 0;
     } catch (const std::exception& ex) {
