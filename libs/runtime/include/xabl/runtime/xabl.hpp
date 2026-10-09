@@ -96,6 +96,8 @@ enum class OpCode {
     CallAt,
     CallSpace,
     CallReplicate,
+    CallVal,
+    CallStr,
     Halt
 };
 
