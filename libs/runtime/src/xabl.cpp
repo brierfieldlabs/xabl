@@ -427,6 +427,22 @@ Program Compiler::compile(std::string_view source) const {
                 continue;
             }
 
+            if (starts_with_ci(line, "SET FILTER TO")) {
+                const std::string condition = trim(line.substr(13));
+                Instruction instruction{OpCode::SetFilter};
+
+                if (!condition.empty()) {
+                    auto filter_program = std::make_shared<Program>();
+                    ExpressionCompiler filter_compiler{*filter_program};
+                    filter_compiler.emit(condition);
+                    filter_program->code.push_back({OpCode::Halt});
+                    instruction.embedded_program = std::move(filter_program);
+                }
+
+                program.code.push_back(std::move(instruction));
+                continue;
+            }
+
             if (starts_with_ci(line, "SEEK ")) {
                 expression_compiler.emit(line.substr(5));
                 program.code.push_back({OpCode::Seek});
@@ -781,8 +797,7 @@ void DbfTable::load() {
         }
         field_name = upper(trim(field_name));
 
-        const std::size_t length = descriptor[16];
-        fields_.push_back(
+        const std::size_t length = descriptor[16];        fields_.push_back(
             {field_name, static_cast<char>(descriptor[11]), offset, length, descriptor[17]});
         offset += length;
     }
@@ -797,7 +812,8 @@ void DbfTable::load() {
             throw std::runtime_error("truncated DBF record data");
         }
 
-        // Preserve physical records exactly, including the deletion marker.        // dBASE record numbers and NDX record pointers refer to physical rows.
+        // Preserve physical records exactly, including the deletion marker.
+        // dBASE record numbers and NDX record pointers refer to physical rows.
         records_.push_back(std::move(record));
     }
 }
@@ -1045,6 +1061,7 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             WorkArea& area = active_work_area();
             area.table = std::make_unique<DbfTable>(path);
             area.index.reset();
+            area.filter.reset();
             area.found = false;
 
             const std::string requested_alias = instruction.operand.as_string();
@@ -1076,12 +1093,22 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::SetFilter: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("SET FILTER TO with no table open");
+            }
+            area.filter = instruction.embedded_program;
+            ++ip;
+            break;
+        }
+
         case OpCode::GoTop: {
             WorkArea& area = active_work_area();
             if (!area.table) {
                 throw std::runtime_error("GO TOP with no table open");
             }
-            area.table->go_top();
+            position_first_visible(area);
             area.found = false;
             ++ip;
             break;
@@ -1111,7 +1138,7 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             }
 
             const double requested = pop().as_number();
-            area.table->skip(static_cast<std::ptrdiff_t>(requested));
+            skip_visible(area, static_cast<std::ptrdiff_t>(requested));
             area.found = false;
             ++ip;
             break;
@@ -1347,6 +1374,195 @@ const Vm::WorkArea& Vm::work_area_for_alias(const std::string& alias) const {
     }
 
     throw std::runtime_error("unknown work-area alias: " + alias);
+}
+
+
+Value Vm::evaluate_expression(const Program& program) const {
+    std::vector<Value> values;
+
+    const auto pop_value = [&]() {
+        if (values.empty()) {
+            throw std::runtime_error("expression stack underflow");
+        }
+        Value value = std::move(values.back());
+        values.pop_back();
+        return value;
+    };
+
+    for (std::size_t ip = 0; ip < program.code.size(); ++ip) {
+        const Instruction& instruction = program.code[ip];
+
+        switch (instruction.opcode) {
+        case OpCode::PushLiteral:
+            values.push_back(instruction.operand);
+            break;
+
+        case OpCode::LoadName:
+            values.push_back(load_name(instruction.text));
+            break;
+
+        case OpCode::UnaryNot:
+            values.push_back(Value(!pop_value().as_logical()));
+            break;
+
+        case OpCode::Add: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_number() + rhs.as_number()));
+            break;
+        }
+
+        case OpCode::Subtract: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_number() - rhs.as_number()));
+            break;
+        }
+
+        case OpCode::Multiply: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_number() * rhs.as_number()));
+            break;
+        }
+
+        case OpCode::Divide: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            if (rhs.as_number() == 0.0) {
+                throw std::runtime_error("division by zero in filter expression");
+            }
+            values.push_back(Value(lhs.as_number() / rhs.as_number()));
+            break;
+        }
+
+        case OpCode::Greater: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_number() > rhs.as_number()));
+            break;
+        }
+
+        case OpCode::Less: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_number() < rhs.as_number()));
+            break;
+        }
+
+        case OpCode::Equal: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            if (std::holds_alternative<std::string>(lhs.storage()) ||
+                std::holds_alternative<std::string>(rhs.storage())) {
+                values.push_back(Value(lhs.as_string() == rhs.as_string()));
+            } else {
+                values.push_back(Value(
+                    std::fabs(lhs.as_number() - rhs.as_number()) < 1e-12));
+            }
+            break;
+        }
+
+        case OpCode::CallEof: {
+            const WorkArea& area = active_work_area();
+            values.push_back(Value(area.table ? area.table->eof() : true));
+            break;
+        }
+
+        case OpCode::CallBof: {
+            const WorkArea& area = active_work_area();
+            values.push_back(Value(area.table ? area.table->bof() : true));
+            break;
+        }
+
+        case OpCode::CallFound:
+            values.push_back(Value(active_work_area().found));
+            break;
+
+        case OpCode::CallRecno: {
+            const WorkArea& area = active_work_area();
+            values.push_back(Value(
+                area.table ? static_cast<double>(area.table->recno()) : 0.0));
+            break;
+        }
+
+        case OpCode::CallReccount: {
+            const WorkArea& area = active_work_area();
+            values.push_back(Value(
+                area.table ? static_cast<double>(area.table->reccount()) : 0.0));
+            break;
+        }
+
+        case OpCode::CallDeleted: {
+            const WorkArea& area = active_work_area();
+            values.push_back(Value(area.table ? area.table->deleted() : false));
+            break;
+        }
+
+        case OpCode::Halt:
+            if (values.empty()) {
+                return {};
+            }
+            return values.back();
+
+        default:
+            throw std::runtime_error("unsupported opcode in filter expression");
+        }
+    }
+
+    return values.empty() ? Value{} : values.back();
+}
+
+bool Vm::filter_matches(const WorkArea& area) const {
+    if (!area.filter) {
+        return true;
+    }
+
+    if (!area.table || area.table->bof() || area.table->eof()) {
+        return false;
+    }
+
+    return evaluate_expression(*area.filter).as_logical();
+}
+
+void Vm::position_first_visible(WorkArea& area) {
+    area.table->go_top();
+
+    if (!area.filter) {
+        return;
+    }
+
+    while (!area.table->eof() && !filter_matches(area)) {
+        area.table->skip(1);
+    }
+}
+
+void Vm::skip_visible(WorkArea& area, std::ptrdiff_t count) {
+    if (count == 0) {
+        return;
+    }
+
+    if (!area.filter) {
+        area.table->skip(count);
+        return;
+    }
+
+    const std::ptrdiff_t direction = count > 0 ? 1 : -1;
+    const std::size_t matches_to_skip =
+        static_cast<std::size_t>(count > 0 ? count : -count);
+
+    for (std::size_t moved = 0; moved < matches_to_skip; ++moved) {
+        area.table->skip(direction);
+
+        while (!area.table->bof() && !area.table->eof() &&
+               !filter_matches(area)) {
+            area.table->skip(direction);
+        }
+
+        if (area.table->bof() || area.table->eof()) {
+            return;
+        }
+    }
 }
 
 Value Vm::load_name(const std::string& name) const {

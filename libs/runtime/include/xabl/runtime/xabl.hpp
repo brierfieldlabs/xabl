@@ -19,6 +19,8 @@
 
 namespace xabl {
 
+class Program;
+
 class Value {
 public:
     using Storage = std::variant<std::monostate, bool, double, std::string>;
@@ -44,6 +46,7 @@ enum class OpCode {
     StoreName,
     OpenTable,
     OpenIndex,
+    SetFilter,
     SelectArea,
     GoTop,
     GoRecord,
@@ -78,6 +81,7 @@ struct Instruction {
     Value operand{};
     std::string text{};
     std::size_t target{};
+    std::shared_ptr<const Program> embedded_program{};
 };
 
 class Program {
@@ -159,6 +163,7 @@ private:
     struct WorkArea {
         std::unique_ptr<DbfTable> table;
         std::unique_ptr<NdxIndex> index;
+        std::shared_ptr<const Program> filter;
         std::string alias;
         bool found{false};
     };
@@ -174,6 +179,10 @@ private:
     [[nodiscard]] WorkArea& active_work_area();
     [[nodiscard]] const WorkArea& active_work_area() const;
     [[nodiscard]] const WorkArea& work_area_for_alias(const std::string& alias) const;
+    [[nodiscard]] Value evaluate_expression(const Program& program) const;
+    [[nodiscard]] bool filter_matches(const WorkArea& area) const;
+    void position_first_visible(WorkArea& area);
+    void skip_visible(WorkArea& area, std::ptrdiff_t count);
 };
 
 } // namespace xabl

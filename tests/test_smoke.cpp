@@ -162,6 +162,26 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        const xabl::Program filter_program =
+            compiler.compile(read_text(fixtures / "legacy-filter.prg"));
+
+        std::ostringstream filter_output;
+        xabl::Vm filter_vm(filter_output);
+        filter_vm.run(filter_program, fixtures);
+
+        const std::string expected_filter =
+            "Alice\n"
+            "Charlie\n"
+            "Bob\n"
+            "Charlie\n"
+            "Bob\n";
+
+        if (filter_output.str() != expected_filter) {
+            std::cerr << "unexpected FILTER output\nExpected:\n"
+                      << expected_filter << "Actual:\n" << filter_output.str();
+            return 1;
+        }
+
         std::cout << "XABL smoke test passed\n";
         return 0;
     } catch (const std::exception& ex) {
