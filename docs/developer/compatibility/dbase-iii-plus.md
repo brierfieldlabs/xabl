@@ -23,9 +23,10 @@ independent original-product reference files are still outstanding.
   raise an explicit error pending dialect-specific conversions.
 - Character functions `LEN()`, `UPPER()`, `LOWER()`,
   `TRIM()`/`RTRIM()`, `LTRIM()`, `LEFT()`, `RIGHT()`, and
-  `SUBSTR()` with an optional length argument. Nested expressions and
-  active filters share byte-oriented results. ASCII case mapping is
-  implemented; original DOS codepage mapping remains pending.
+  `SUBSTR()` with an optional length argument, and two-argument `AT()`
+  for one-based substring search. Nested expressions and active filters
+  share byte-oriented results. ASCII case mapping is implemented;
+  original DOS codepage mapping remains pending.
 
 - `SET EXACT ON/OFF`: global character equality mode; OFF (default)
   compares the left string against the right prefix, ON compares after

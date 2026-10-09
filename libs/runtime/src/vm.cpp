@@ -304,6 +304,14 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::CallAt: {
+            const Value haystack = pop();
+            const Value needle = pop();
+            stack_.push_back(apply_at_function(needle, haystack));
+            ++ip;
+            break;
+        }
+
         case OpCode::Print:
             output_ << pop().as_string() << '\n';
             ++ip;
@@ -535,6 +543,13 @@ Value Vm::evaluate_expression(const Program& program) const {
             values.push_back(apply_slice_function(
                 instruction.opcode, characters, position,
                 has_length ? &length : nullptr));
+            break;
+        }
+
+        case OpCode::CallAt: {
+            const Value haystack = pop_value();
+            const Value needle = pop_value();
+            values.push_back(apply_at_function(needle, haystack));
             break;
         }
 
