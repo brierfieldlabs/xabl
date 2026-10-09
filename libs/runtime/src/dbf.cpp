@@ -206,13 +206,20 @@ void DbfTable::set_deleted(bool deleted_state) {
         throw std::runtime_error("DELETE/RECALL attempted outside a record");
     }
 
-    records_[current_][0] = deleted_state ? '*' : ' ';
-    flush_record(current_);
+    auto& record = records_[current_];
+    const std::vector<char> original = record;
+    record[0] = deleted_state ? '*' : ' ';
+    try {
+        flush_record(current_, original);
+    } catch (...) {
+        record = original;
+        throw;
+    }
 }
 
 void DbfTable::replace(const std::string& name, const Value& value) {
-    if (eof()) {
-        throw std::runtime_error("REPLACE attempted at EOF");
+    if (before_first_ || eof()) {
+        throw std::runtime_error("REPLACE attempted outside a record");
     }
 
     const Field& field_info = find_field(name);
@@ -240,9 +247,15 @@ void DbfTable::replace(const std::string& name, const Value& value) {
     }
 
     auto& record = records_[current_];
+    const std::vector<char> original = record;
     std::copy(encoded.begin(), encoded.end(),
               record.begin() + static_cast<std::ptrdiff_t>(field_info.offset));
-    flush_record(current_);
+    try {
+        flush_record(current_, original);
+    } catch (...) {
+        record = original;
+        throw;
+    }
 }
 
 void DbfTable::load() {
@@ -273,6 +286,7 @@ void DbfTable::load() {
     record_length_ =
         static_cast<std::uint16_t>(header[10]) |
         (static_cast<std::uint16_t>(header[11]) << 8);
+    header_length_ = header_length;
 
     // Check physical size before reserving record_count: a corrupt 32-bit
     // count must not cause massive allocations or out-of-bounds reads.
@@ -345,7 +359,13 @@ void DbfTable::load() {
     }
 }
 
-void DbfTable::flush_record(std::size_t record_index) {
+void DbfTable::flush_record(std::size_t record_index,
+                            const std::vector<char>& original_record) {
+    if (record_index >= records_.size() ||
+        original_record.size() != record_length_ ||
+        records_[record_index].size() != record_length_) {
+        throw std::runtime_error("invalid DBF record update");
+    }
     std::fstream file(path_, std::ios::in | std::ios::out | std::ios::binary);
     if (!file) {
         throw std::runtime_error("cannot update DBF table: " + path_.string());
@@ -353,17 +373,61 @@ void DbfTable::flush_record(std::size_t record_index) {
 
     unsigned char header[32]{};
     file.read(reinterpret_cast<char*>(header), sizeof(header));
-    const std::uint16_t header_length =
-        static_cast<std::uint16_t>(header[8]) |
-        (static_cast<std::uint16_t>(header[9]) << 8);
+    if (!file) {
+        throw std::runtime_error("truncated DBF header before update");
+    }
+    const auto read_u16 = [&](std::size_t offset) -> std::size_t {
+        return static_cast<std::size_t>(header[offset]) |
+               (static_cast<std::size_t>(header[offset + 1]) << 8);
+    };
+    const auto disk_count =
+        static_cast<std::uint32_t>(header[4]) |
+        (static_cast<std::uint32_t>(header[5]) << 8) |
+        (static_cast<std::uint32_t>(header[6]) << 16) |
+        (static_cast<std::uint32_t>(header[7]) << 24);
+    if ((header[0] != 0x03 && header[0] != 0x83) ||
+        read_u16(8) != header_length_ ||
+        read_u16(10) != record_length_ ||
+        disk_count != records_.size()) {
+        throw std::runtime_error("DBF header changed on disk; update refused");
+    }
+    const auto records_end = static_cast<std::uintmax_t>(header_length_) +
+                             static_cast<std::uintmax_t>(records_.size()) *
+                                 record_length_;
+    file.seekg(0, std::ios::end);
+    const auto file_end = file.tellg();
+    if (file_end < 0 ||
+        (static_cast<std::uintmax_t>(file_end) != records_end &&
+         static_cast<std::uintmax_t>(file_end) != records_end + 1)) {
+        throw std::runtime_error("DBF length/trailer changed; update refused");
+    }
+    if (static_cast<std::uintmax_t>(file_end) == records_end + 1) {
+        file.seekg(static_cast<std::streamoff>(records_end));
+        char marker{};
+        file.get(marker);
+        if (!file || static_cast<unsigned char>(marker) != 0x1A) {
+            throw std::runtime_error("unknown DBF trailer; update refused");
+        }
+    }
 
-    const std::streamoff position =
-        static_cast<std::streamoff>(header_length) +
-        static_cast<std::streamoff>(record_index * record_length_);
-
-    file.seekp(position, std::ios::beg);
+    const auto position = static_cast<std::streamoff>(header_length_) +
+                          static_cast<std::streamoff>(record_index) *
+                              static_cast<std::streamoff>(record_length_);
+    file.clear();
+    file.seekg(position);
+    std::vector<char> existing(record_length_);
+    file.read(existing.data(), static_cast<std::streamsize>(existing.size()));
+    if (!file || existing != original_record) {
+        throw std::runtime_error("DBF record changed on disk; update refused");
+    }
+    // Optimistic preimage validation prevents accidental sequential stale
+    // writes, but is not a substitute for cross-process locking: another
+    // writer could intervene between the check and the write.
+    file.clear();
+    file.seekp(position);
     file.write(records_[record_index].data(),
                static_cast<std::streamsize>(records_[record_index].size()));
+    file.flush();
     if (!file) {
         throw std::runtime_error("failed writing DBF record");
     }

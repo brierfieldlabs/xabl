@@ -70,9 +70,12 @@ independent original-product reference files are still outstanding.
   (RECNO() = RECCOUNT()+1), not BOF.
 - String ordering, collations, locale/code-page handling and later-dialect
   `==` differences require separate compatibility work.
-- The DBF writer is single-writer only. There is no cross-process locking,
-  transaction rollback, crash-consistency guarantee, or automatic refresh
-  of tables already open elsewhere. Do not use it concurrently on live data.
+- The DBF writer is single-writer only. Record updates now validate the
+  physical row preimage, header and trailer before writing and restore
+  cached values after a rejected write. This prevents some sequential stale
+  updates but is **not** a cross-process lock, atomic transaction, crash-
+  consistency guarantee, or automatic refresh. Do not use it concurrently
+  on live data.
 - DBF header validation now rejects impossible physical record counts and
   malformed field terminators before allocating. The reader supports empty
   DBFs with a one-byte field-descriptor terminator.

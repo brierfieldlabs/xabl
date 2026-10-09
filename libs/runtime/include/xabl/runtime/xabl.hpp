@@ -158,11 +158,14 @@ private:
     std::vector<Field> fields_;
     std::vector<std::vector<char>> records_;
     std::size_t record_length_{};
+    std::size_t header_length_{};
     std::size_t current_{};
     bool before_first_{false};
 
     void load();
-    void flush_record(std::size_t record_index);
+    // Refuse a write if its on-disk preimage is no longer our snapshot.
+    void flush_record(std::size_t record_index,
+                      const std::vector<char>& original_record);
     [[nodiscard]] const Field& find_field(const std::string& name) const;
 };
 

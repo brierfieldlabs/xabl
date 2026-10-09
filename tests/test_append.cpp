@@ -359,6 +359,92 @@ int main(int argc, char** argv) {
                 "SPACE or REPLICATE inside filter failed: " +
                     replicate_filter_output.str());
 
+        // An external writer changing a row after USE must not be silently
+        // overwritten by a stale REPLACE or DELETE. The in-memory record
+        // must also roll back when that optimistic write is rejected.
+        const fs::path stale_path = temp.path / "stale.dbf";
+        fs::copy_file(fixtures / "customers.dbf", stale_path);
+        xabl::DbfTable stale(stale_path);
+        stale.go_top();
+        const std::string original_name = stale.field("NAME").as_string();
+        require(!original_name.empty(), "stale-write fixture has no first name");
+        const std::string stale_bytes = content(stale_path);
+        const std::size_t stale_header =
+            static_cast<unsigned char>(stale_bytes[8]) |
+            (static_cast<unsigned char>(stale_bytes[9]) << 8);
+        // NAME is the first field after the one-byte deleted flag.
+        { std::fstream file(stale_path, std::ios::binary | std::ios::in | std::ios::out);
+          file.seekp(static_cast<std::streamoff>(stale_header + 1));
+          file.put('Z'); }
+        const auto external_change = content(stale_path);
+        bool stale_rejected = false;
+        try { stale.replace("NAME", xabl::Value(std::string("Wrong"))); }
+        catch (const std::runtime_error&) { stale_rejected = true; }
+        require(stale_rejected, "stale REPLACE overwrote an external change");
+        require(content(stale_path) == external_change,
+                "stale REPLACE altered the on-disk DBF");
+        require(stale.field("NAME").as_string() == original_name,
+                "failed REPLACE left the in-memory row mutated");
+        stale_rejected = false;
+        try { stale.set_deleted(true); }
+        catch (const std::runtime_error&) { stale_rejected = true; }
+        require(stale_rejected, "stale DELETE overwrote an external change");
+        require(!stale.deleted(), "failed DELETE left record deleted in memory");
+        require(content(stale_path) == external_change,
+                "stale DELETE altered the external DBF record");
+
+        // Once the exact original preimage is restored, a normal update
+        // succeeds, including persistence and the deleted flag.
+        { std::fstream file(stale_path, std::ios::binary | std::ios::in | std::ios::out);
+          file.seekp(static_cast<std::streamoff>(stale_header + 1));
+          file.put(stale_bytes[stale_header + 1]); }
+        stale.replace("NAME", xabl::Value(std::string("Fresh")));
+        stale.set_deleted(true);
+        xabl::DbfTable verified_stale(stale_path);
+        verified_stale.go_top();
+        require(verified_stale.field("NAME").as_string() == "Fresh" &&
+                    verified_stale.deleted(), "recovered DBF update did not persist");
+
+        stale.go_record(0);
+        stale_rejected = false;
+        try { stale.replace("NAME", xabl::Value(std::string("BOF"))); }
+        catch (const std::runtime_error&) { stale_rejected = true; }
+        require(stale_rejected, "REPLACE at BOF unexpectedly modified first record");
+
+        // The writer must refuse header-count changes and arbitrary trailers
+        // without overwriting an original row.
+        const fs::path altered_header_path = temp.path / "altered-header.dbf";
+        fs::copy_file(fixtures / "customers.dbf", altered_header_path);
+        xabl::DbfTable altered_header(altered_header_path);
+        altered_header.go_top();
+        { std::fstream file(altered_header_path,
+                           std::ios::binary | std::ios::in | std::ios::out);
+          file.seekp(4);
+          file.put(static_cast<char>(0xFF)); }
+        const auto bad_header_bytes = content(altered_header_path);
+        stale_rejected = false;
+        try { altered_header.replace("NAME", xabl::Value(std::string("Wrong"))); }
+        catch (const std::runtime_error&) { stale_rejected = true; }
+        require(stale_rejected && content(altered_header_path) == bad_header_bytes,
+                "DBF header drift was not rejected");
+
+        const fs::path altered_trailer_path = temp.path / "altered-trailer.dbf";
+        fs::copy_file(fixtures / "customers.dbf", altered_trailer_path);
+        xabl::DbfTable altered_trailer(altered_trailer_path);
+        altered_trailer.go_top();
+        { std::ofstream file(altered_trailer_path,
+                             std::ios::binary | std::ios::app);
+          file.put('X'); }
+        const auto bad_trailer_bytes = content(altered_trailer_path);
+        stale_rejected = false;
+        try { altered_trailer.set_deleted(true); }
+        catch (const std::runtime_error&) { stale_rejected = true; }
+        require(stale_rejected && content(altered_trailer_path) == bad_trailer_bytes &&
+                    !altered_trailer.deleted(),
+                "DBF trailer drift was not rejected cleanly");
+        require(content(fixtures / "customers.dbf") == original,
+                "write-safety tests modified the original DBF fixture");
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {
