@@ -189,10 +189,6 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             if (!area.table) {
                 throw std::runtime_error("GO BOTTOM with no table open");
             }
-            if (area.index) {
-                throw std::runtime_error(
-                    "GO BOTTOM in index order is not yet implemented");
-            }
             position_last_visible(area);
             area.found = false;
             ++ip;
@@ -651,6 +647,18 @@ bool Vm::record_visible(const WorkArea& area) const {
 }
 
 void Vm::position_last_visible(WorkArea& area) {
+    if (area.index) {
+        const auto order = area.index->ordered_records();
+        for (auto it = order.rbegin(); it != order.rend(); ++it) {
+            if (*it == 0 || *it > area.table->reccount()) {
+                throw std::runtime_error("NDX references an invalid physical record");
+            }
+            area.table->go_record(*it);
+            if (record_visible(area)) return;
+        }
+        area.table->go_record(0); // BOF when no indexed row is visible
+        return;
+    }
     area.table->go_bottom();
     while (!area.table->eof() && !area.table->bof() &&
            !record_visible(area)) {
@@ -659,8 +667,20 @@ void Vm::position_last_visible(WorkArea& area) {
 }
 
 void Vm::position_first_visible(WorkArea& area) {
-    area.table->go_top();
+    if (area.index) {
+        const auto order = area.index->ordered_records();
+        for (const auto physical_row : order) {
+            if (!physical_row || physical_row > area.table->reccount()) {
+                throw std::runtime_error("NDX references an invalid physical record");
+            }
+            area.table->go_record(physical_row);
+            if (record_visible(area)) return;
+        }
+        area.table->go_record(area.table->reccount() + 1);
+        return;
+    }
 
+    area.table->go_top();
     while (!area.table->eof() && !record_visible(area)) {
         area.table->skip(1);
     }
@@ -668,6 +688,55 @@ void Vm::position_first_visible(WorkArea& area) {
 
 void Vm::skip_visible(WorkArea& area, std::ptrdiff_t count) {
     if (count == 0) {
+        return;
+    }
+
+    if (area.index) {
+        const auto order = area.index->ordered_records();
+        // Check the index before moving the record pointer. A stale NDX
+        // must not direct navigation to an invalid physical row.
+        for (const auto physical_row : order) {
+            if (!physical_row || physical_row > area.table->reccount()) {
+                throw std::runtime_error("NDX references an invalid physical record");
+            }
+        }
+        const bool forward = count > 0;
+        std::ptrdiff_t position = forward ? -1 :
+            static_cast<std::ptrdiff_t>(order.size());
+        if (!area.table->bof() && !area.table->eof()) {
+            const auto at = std::find(order.begin(), order.end(),
+                                      area.table->recno());
+            if (at == order.end()) {
+                throw std::runtime_error("current physical row missing from active NDX");
+            }
+            position = std::distance(order.begin(), at);
+        } else if (area.table->bof()) {
+            position = -1;
+        } else {
+            position = static_cast<std::ptrdiff_t>(order.size());
+        }
+        const auto direction = forward ? 1 : -1;
+        std::uintmax_t remaining = forward
+            ? static_cast<std::uintmax_t>(count)
+            : static_cast<std::uintmax_t>(-(count + 1)) + 1;
+        while (remaining != 0) {
+            position += direction;
+            while (position >= 0 &&
+                   position < static_cast<std::ptrdiff_t>(order.size())) {
+                area.table->go_record(order[static_cast<std::size_t>(position)]);
+                if (record_visible(area)) break;
+                position += direction;
+            }
+            if (position < 0) {
+                area.table->go_record(0);
+                return;
+            }
+            if (position >= static_cast<std::ptrdiff_t>(order.size())) {
+                area.table->go_record(area.table->reccount() + 1);
+                return;
+            }
+            --remaining;
+        }
         return;
     }
 

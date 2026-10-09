@@ -19,8 +19,10 @@ independent original-product reference files are still outstanding.
 - `USE` with no filename: close current work area's table, index, filter,
   FOUND state and alias, without closing another work area.
 - `SET INDEX TO` with no filenames: close current active NDX index.
-- `GO BOTTOM` or `GOTO BOTTOM`: move to the last visible physical record
-  when no index is active. A filter and global SET DELETED compose.
+- `GO TOP`, `GO BOTTOM`, `GOTO BOTTOM` and `SKIP`:
+  navigate NDX key order when indexed, physical order otherwise. Filters
+  and global SET DELETED visibility compose with both modes; direct
+  `GO n` still addresses physical record numbers.
 - Regression tests use real DBF byte persistence and disposable table copies.
   `tests/fixtures/legacy-mini-ledger.prg` exercises multiple work areas,
   aggregation, filters, searching, append and updates.
@@ -33,7 +35,7 @@ independent original-product reference files are still outstanding.
 - The current NDX implementation is read-only. `APPEND BLANK` and
   `REPLACE` refuse a work area with an active NDX index to avoid silently
   stale key expressions and index records.
-  `GO BOTTOM` also refuses active NDX until indexed-order navigation exists.
+  Indexed navigation is read-only; there is no NDX write maintenance yet.
 - String ordering, collations, locale/code-page handling and later-dialect
   `==` differences require separate compatibility work.
 - The DBF writer is single-writer only. There is no cross-process locking,
