@@ -18,7 +18,7 @@ namespace {
 // must remain an identifier and quoted AND/OR must remain ordinary text.
 enum class Kind {
     End, Number, String, Identifier, True, False,
-    LParen, RParen, Plus, Minus, Multiply, Divide,
+    LParen, RParen, Comma, Plus, Minus, Multiply, Divide,
     Greater, Less, Equal, EqualExact, NotEqual, GreaterEqual, LessEqual,
     And, Or, Not
 };
@@ -125,6 +125,7 @@ public:
         switch (c) {
         case '(': return {Kind::LParen, "(", start};
         case ')': return {Kind::RParen, ")", start};
+        case ',': return {Kind::Comma, ",", start};
         case '+': return {Kind::Plus, "+", start};
         case '-': return {Kind::Minus, "-", start};
         case '*': return {Kind::Multiply, "*", start};
@@ -266,6 +267,36 @@ private:
                 }
                 advance();
                 emit(opcode);
+                return;
+            }
+            // The second expression can be an arbitrary nested call or
+            // arithmetic expression; only SUBSTR accepts a third argument.
+            OpCode slice_op = OpCode::Halt;
+            if (current.text == "LEFT") slice_op = OpCode::CallLeft;
+            if (current.text == "RIGHT") slice_op = OpCode::CallRight;
+            if (current.text == "SUBSTR") slice_op = OpCode::CallSubstr;
+            if (slice_op != OpCode::Halt) {
+                if (token_.kind == Kind::RParen) fail("missing string argument");
+                expression(1);
+                if (token_.kind != Kind::Comma) {
+                    fail("string slice function expects two arguments");
+                }
+                advance();
+                expression(1);
+                std::size_t argument_count = 2;
+                if (token_.kind == Kind::Comma &&
+                    slice_op == OpCode::CallSubstr) {
+                    advance();
+                    expression(1);
+                    argument_count = 3;
+                }
+                if (token_.kind != Kind::RParen) {
+                    fail("invalid string slice function argument count");
+                }
+                advance();
+                Instruction instruction{slice_op};
+                instruction.target = argument_count;
+                program_.code.push_back(std::move(instruction));
                 return;
             }
             throw std::runtime_error("unsupported function: " + current.text);

@@ -6,6 +6,8 @@
 #include <xabl/runtime/xabl.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <cctype>
 #include <stdexcept>
 #include <string>
@@ -48,6 +50,51 @@ inline Value apply_text_function(OpCode opcode, const Value& argument) {
     default:
         throw std::runtime_error("unsupported character function opcode");
     }
+}
+
+// Byte-oriented legacy string extraction. Numeric positions are truncated
+// toward zero, but are range-checked before converting to an index.
+inline Value apply_slice_function(OpCode opcode, const Value& string_arg,
+                                  const Value& position_arg,
+                                  const Value* count_arg = nullptr) {
+    const auto* characters = std::get_if<std::string>(&string_arg.storage());
+    const auto* position = std::get_if<double>(&position_arg.storage());
+    if (!characters || !position || !std::isfinite(*position)) {
+        throw std::runtime_error("string slice requires string and numeric arguments");
+    }
+    const auto count_to_size = [](double value, std::size_t maximum) {
+        if (!std::isfinite(value)) {
+            throw std::runtime_error("string slice count must be finite");
+        }
+        if (value <= 0) return std::size_t{0};
+        if (value >= static_cast<double>(maximum)) return maximum;
+        return static_cast<std::size_t>(std::trunc(value));
+    };
+    const auto& text = *characters;
+    if (opcode == OpCode::CallLeft) {
+        if (count_arg) throw std::runtime_error("LEFT takes two arguments");
+        return Value(text.substr(0, count_to_size(*position, text.size())));
+    }
+    if (opcode == OpCode::CallRight) {
+        if (count_arg) throw std::runtime_error("RIGHT takes two arguments");
+        const auto count = count_to_size(*position, text.size());
+        return Value(text.substr(text.size() - count));
+    }
+    if (opcode == OpCode::CallSubstr) {
+        if (*position < 1) {
+            throw std::runtime_error("SUBSTR position must be one-based and positive");
+        }
+        if (*position > static_cast<double>(text.size())) return Value(std::string{});
+        const auto start = static_cast<std::size_t>(std::trunc(*position)) - 1;
+        std::size_t count = text.size() - start;
+        if (count_arg) {
+            const auto* numeric = std::get_if<double>(&count_arg->storage());
+            if (!numeric) throw std::runtime_error("SUBSTR length must be numeric");
+            count = count_to_size(*numeric, count);
+        }
+        return Value(text.substr(start, count));
+    }
+    throw std::runtime_error("unsupported string slice opcode");
 }
 
 } // namespace xabl

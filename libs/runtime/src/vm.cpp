@@ -288,6 +288,21 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             ++ip;
             break;
 
+        case OpCode::CallLeft:
+        case OpCode::CallRight:
+        case OpCode::CallSubstr: {
+            const bool has_length = instruction.opcode == OpCode::CallSubstr &&
+                                    instruction.target == 3;
+            const Value length = has_length ? pop() : Value{};
+            const Value position = pop();
+            const Value characters = pop();
+            stack_.push_back(apply_slice_function(
+                instruction.opcode, characters, position,
+                has_length ? &length : nullptr));
+            ++ip;
+            break;
+        }
+
         case OpCode::Print:
             output_ << pop().as_string() << '\n';
             ++ip;
@@ -520,6 +535,20 @@ Value Vm::evaluate_expression(const Program& program) const {
         case OpCode::CallLTrim:
             values.push_back(apply_text_function(instruction.opcode, pop_value()));
             break;
+
+        case OpCode::CallLeft:
+        case OpCode::CallRight:
+        case OpCode::CallSubstr: {
+            const bool has_length = instruction.opcode == OpCode::CallSubstr &&
+                                    instruction.target == 3;
+            const Value length = has_length ? pop_value() : Value{};
+            const Value position = pop_value();
+            const Value characters = pop_value();
+            values.push_back(apply_slice_function(
+                instruction.opcode, characters, position,
+                has_length ? &length : nullptr));
+            break;
+        }
 
         case OpCode::UnaryNot:
             values.push_back(Value(!pop_value().as_logical()));

@@ -90,6 +90,9 @@ enum class OpCode {
     CallLower,
     CallTrim,
     CallLTrim,
+    CallLeft,
+    CallRight,
+    CallSubstr,
     Halt
 };
 
