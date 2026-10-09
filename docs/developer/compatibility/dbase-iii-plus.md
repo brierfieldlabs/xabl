@@ -191,5 +191,15 @@ normalise forward. Invalid text yields blank dates.
 Date comparisons between two populated dates are chronological.
 Blank-date comparisons are still explicitly unsupported until dialect
 reference behaviour is tested. SET DATE, SET CENTURY/EPOCH, DATE(),
-date arithmetic and memo DBT are separate work. Do not infer that
-these modern restrictions existed in the original interpreter.
+memo DBT is still separate work. Do not infer that these modern
+restrictions existed in the original interpreter.
+
+### Date arithmetic
+
+Adding or subtracting a whole number of days to/from a populated typed
+date yields another date. Subtracting two populated dates returns a
+signed numeric day difference. Chronological leap-day and year-boundary
+cases are regression-tested, including inside active work-area filters.
+Blank dates, fractional/out-of-range day counts and mixed date/character
+operands are rejected pending original-product parity testing. Date
+arithmetic is independent of terminal locale and host timezone.

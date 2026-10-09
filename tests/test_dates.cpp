@@ -89,6 +89,33 @@ int main(int argc, char** argv) {
                 ".T.\n.T.\n.T.\nBob\nCara\nAlice\nCara\n",
                 "typed dates in expression/filter mismatch: " + output.str());
 
+        // III PLUS calendar arithmetic operates on date values and
+        // whole-day offsets, preserving Gregorian leap-day boundaries.
+        std::ostringstream arithmetic_output;
+        xabl::Vm arithmetic_vm(arithmetic_output);
+        script(arithmetic_vm, compiler,
+               "? DTOS(CTOD('02/28/2000') + 1)\n"
+               "? DTOS(CTOD('03/01/2000') - 1)\n"
+               "? DTOS(CTOD('12/31/99') + 1)\n"
+               "? DTOS(CTOD('01/01/2000') - 1)\n"
+               "? CTOD('03/01/84') - CTOD('02/29/84')\n"
+               "? CTOD('01/01/2000') - CTOD('01/01/1999')\n"
+               "? CTOD('01/01/1999') - CTOD('01/01/2000')\n"
+               "? DTOS(CTOD('03/01/2000') - 366)\n"
+               "? DTOS(CTOD('02/28/84') + 2)\n"
+               "? DTOS(CTOD('03/01/84') - 2)\n"
+               "? CTOD('12/31/1999') - CTOD('01/01/1999')\n"
+               "USE dates\n"
+               "SET FILTER TO STARTED + 1 >= CTOD('01/01/2001')\n"
+               "GO TOP\n? TRIM(NAME)\n"
+               "SET FILTER TO STARTED - CTOD('01/01/2000') > 0\n"
+               "GO TOP\n? TRIM(NAME)\n", temp);
+        require(arithmetic_output.str() ==
+                "20000229\n20000229\n20000101\n19991231\n"
+                "1\n365\n-365\n19990301\n19840301\n19840228\n364\nBob\nBob\n",
+                "date arithmetic or date field filtering failed: " +
+                    arithmetic_output.str());
+
         // Dates must be written as exactly eight YYYYMMDD bytes.
         script(vm, compiler, "SET FILTER TO\nGO TOP\n"
                              "REPLACE RETIRED WITH CTOD('12/31/99')\n"
@@ -114,6 +141,17 @@ int main(int argc, char** argv) {
                 "? YEAR('19840229')", "? DTOS('19840229')",
                 "? DTOC(1984)", "? CTOD(1984)",
                 "? YEAR()", "? DTOS(CTOD('01/01/84')) + 1",
+                "? CTOD('01/01/84') + CTOD('01/02/84')",
+                "? 1 + CTOD('01/01/84')",
+                "? CTOD('01/01/84') + 1.5",
+                "? CTOD('01/01/84') + '1'",
+                "? CTOD('01/01/84') - .T.",
+                "? CTOD('01/01/84') + 3660001",
+                "? CTOD('01/01/84') - 1e100",
+                "? CTOD('01/01/0001') - 1",
+                "? CTOD('12/31/9999') + 1",
+                "? CTOD('invalid') + 1",
+                "? CTOD('invalid') - CTOD('01/01/84')",
                 "? CTOD('02/29/84') > '19840229'",
                 "? CTOD('02/29/84') == 1984",
                 "REPLACE RETIRED WITH '19991231'"}) {
