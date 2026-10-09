@@ -78,6 +78,21 @@ std::size_t find_command_marker(std::string_view source,
     return std::string::npos;
 }
 
+// Stamp all instructions appended by one source statement, including those
+// emitted by the expression compiler. A scope guard is necessary because each
+// recognised dBASE command exits the parser's line loop with `continue`.
+struct StatementSourceScope {
+    Program& program;
+    std::size_t first;
+    SourceLocation source;
+
+    ~StatementSourceScope() {
+        for (std::size_t i = first; i < program.code.size(); ++i) {
+            program.code[i].source = source;
+        }
+    }
+};
+
 struct Block {
     enum class Kind { If, DoWhile };
     Kind kind;
@@ -156,7 +171,18 @@ Program Compiler::compile(std::string_view source) const {
             continue;
         }
 
+        // Coordinates refer to the original buffer, before trimming or
+        // stripping inline comments. CRLF is handled by the existing reader.
+        const auto first_non_space = std::find_if_not(
+            raw_line.begin(), raw_line.end(), [](unsigned char ch) {
+                return std::isspace(ch) != 0;
+            });
+        const auto column = static_cast<std::size_t>(
+            std::distance(raw_line.begin(), first_non_space)) + 1;
+
         try {
+            StatementSourceScope statement{program, program.code.size(),
+                                           {line_number, column}};
             if (equal_ci(line, "USE")) {
                 program.code.push_back({OpCode::CloseTable});
                 continue;
@@ -215,6 +241,9 @@ Program Compiler::compile(std::string_view source) const {
                     filter_program->dialect = profile_.dialect;
                     ExpressionCompiler filter_compiler{*filter_program};
                     filter_compiler.emit(condition);
+                    for (auto& emitted : filter_program->code) {
+                        emitted.source = {line_number, column};
+                    }
                     filter_program->code.push_back({OpCode::Halt});
                     instruction.embedded_program = std::move(filter_program);
                 }

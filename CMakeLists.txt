@@ -10,6 +10,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_library(xabl_core
     libs/runtime/src/compiler.cpp
+    libs/runtime/src/debugger.cpp
     libs/runtime/src/expression.cpp
     libs/runtime/src/profile.cpp
     libs/runtime/src/value.cpp
@@ -59,6 +60,11 @@ add_test(
     COMMAND xabl_append_tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures
 )
 set_tests_properties(xabl_append PROPERTIES DEPENDS xabl_fixture_generate)
+
+# Source mapping and breakpoints are headless and do not require curses.
+add_executable(xabl_debugger_tests tests/test_debugger.cpp)
+target_link_libraries(xabl_debugger_tests PRIVATE xabl_core)
+add_test(NAME xabl_debugger COMMAND xabl_debugger_tests)
 
 add_executable(xabl_control_flow_tests tests/test_control_flow.cpp)
 target_link_libraries(xabl_control_flow_tests PRIVATE xabl_core)
