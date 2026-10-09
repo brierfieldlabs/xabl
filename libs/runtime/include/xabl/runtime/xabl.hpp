@@ -7,12 +7,15 @@
 
 #pragma once
 
+#include <xabl/runtime/profile.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <iosfwd>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -95,12 +98,20 @@ struct Instruction {
 
 class Program {
 public:
+    // The compiler stamps bytecode for the selected legacy dialect. The VM
+    // refuses execution under a different dialect.
+    CompatibilityDialect dialect{CompatibilityDialect::DBaseIIIPlus};
     std::vector<Instruction> code;
 };
 
 class Compiler {
 public:
+    /// Create a compiler for an implemented profile (III PLUS by default).
+    explicit Compiler(CompatibilityProfile profile = {});
     [[nodiscard]] Program compile(std::string_view source) const;
+
+private:
+    CompatibilityProfile profile_;
 };
 
 class DbfTable {
@@ -164,7 +175,8 @@ private:
 
 class Vm {
 public:
-    explicit Vm(std::ostream& output);
+    /// Bind an executable runtime dialect and the program output stream.
+    explicit Vm(std::ostream& output, CompatibilityProfile profile = {});
 
     void run(const Program& program, const std::filesystem::path& working_directory);
 
@@ -180,6 +192,7 @@ private:
     };
 
     std::ostream& output_;
+    CompatibilityProfile profile_;
     std::vector<Value> stack_;
     std::unordered_map<std::string, Value> variables_;
     std::unordered_map<int, WorkArea> work_areas_;

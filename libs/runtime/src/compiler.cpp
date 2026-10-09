@@ -26,8 +26,13 @@ struct Block {
 
 } // namespace
 
+Compiler::Compiler(CompatibilityProfile profile) : profile_(profile) {
+    profile_.require_implemented();
+}
+
 Program Compiler::compile(std::string_view source) const {
     Program program;
+    program.dialect = profile_.dialect;
     ExpressionCompiler expression_compiler{program};
     std::vector<Block> blocks;
 
@@ -144,6 +149,7 @@ Program Compiler::compile(std::string_view source) const {
 
                 if (!condition.empty()) {
                     auto filter_program = std::make_shared<Program>();
+                    filter_program->dialect = profile_.dialect;
                     ExpressionCompiler filter_compiler{*filter_program};
                     filter_compiler.emit(condition);
                     filter_program->code.push_back({OpCode::Halt});
