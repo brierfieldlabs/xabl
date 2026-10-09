@@ -10,6 +10,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_library(xabl_core
     libs/runtime/src/compiler.cpp
+    libs/runtime/src/expression.cpp
     libs/runtime/src/value.cpp
     libs/runtime/src/dbf.cpp
     libs/runtime/src/ndx.cpp
