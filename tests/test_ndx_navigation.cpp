@@ -102,6 +102,24 @@ int main(int argc, char** argv) {
         check(load(fixtures / "customers.dbf") != dbf,
               "shuffled fixture unexpectedly equals original");
 
+        // A failed SEEK must leave EOF true, BOF false, FOUND false, and
+        // RECNO one past the last physical record, even from the first row.
+        // A subsequent successful SEEK restores a valid current record.
+        std::ostringstream seeks;
+        xabl::Vm seek_vm(seeks);
+        seek_vm.run(compiler.compile(
+            "USE shuffled\nSET INDEX TO shuffled\n"
+            "GO TOP\nSEEK 'NOT PRESENT'\n"
+            "? EOF()\n? BOF()\n? FOUND()\n? RECNO()\n"
+            "SEEK 'Bob'\n? EOF()\n? FOUND()\n? RECNO()\n"
+            "SEEK 'ZZZZZZ'\n? EOF()\n? FOUND()\n? RECNO()\n"
+            "SKIP -1\n? NAME\n"), temp.path);
+        check(seeks.str() ==
+                  ".T.\n.F.\n.F.\n4\n"
+                  ".F.\n.T.\n2\n"
+                  ".T.\n.F.\n4\nCharlie\n",
+              ("unexpected failed SEEK pointer behaviour: " + seeks.str()).c_str());
+
         // A cyclic NDX page pointer is corrupted input, not a navigation path.
         ndx[512 + 4] = 1;
         ndx[512 + 5] = 0;
