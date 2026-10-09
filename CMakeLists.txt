@@ -9,7 +9,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_library(xabl_core
-    libs/runtime/src/xabl.cpp
+    libs/runtime/src/compiler.cpp
+    libs/runtime/src/value.cpp
+    libs/runtime/src/dbf.cpp
+    libs/runtime/src/ndx.cpp
+    libs/runtime/src/vm.cpp
 )
 
 target_include_directories(xabl_core

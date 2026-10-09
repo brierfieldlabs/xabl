@@ -1,0 +1,657 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Brierfield Labs
+#include <xabl/runtime/xabl.hpp>
+#include "internal.hpp"
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <cmath>
+#include <cstring>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <stdexcept>
+
+namespace xabl {
+Vm::Vm(std::ostream& output) : output_(output) {}
+
+void Vm::run(const Program& program, const std::filesystem::path& working_directory) {
+    stack_.clear();
+    std::size_t ip = 0;
+
+    while (ip < program.code.size()) {
+        const Instruction& instruction = program.code[ip];
+
+        switch (instruction.opcode) {
+        case OpCode::PushLiteral:
+            stack_.push_back(instruction.operand);
+            ++ip;
+            break;
+
+        case OpCode::LoadName:
+            stack_.push_back(load_name(instruction.text));
+            ++ip;
+            break;
+
+        case OpCode::StoreName:
+            variables_[upper(instruction.text)] = pop();
+            ++ip;
+            break;
+
+        case OpCode::SelectArea: {
+            const std::string selector = trim(instruction.text);
+            char* end = nullptr;
+            const long numeric = std::strtol(selector.c_str(), &end, 10);
+
+            if (end != nullptr && *end == '\0') {
+                if (numeric <= 0) {
+                    throw std::runtime_error("SELECT requires a positive work area");
+                }
+                active_area_ = static_cast<int>(numeric);
+                work_areas_.try_emplace(active_area_);
+            } else {
+                const std::string wanted = upper(selector);
+                bool matched = false;
+                for (const auto& [number, area] : work_areas_) {
+                    if (!area.alias.empty() && upper(area.alias) == wanted) {
+                        active_area_ = number;
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    throw std::runtime_error("unknown work-area alias: " + selector);
+                }
+            }
+
+            ++ip;
+            break;
+        }
+
+        case OpCode::OpenTable: {
+            std::filesystem::path path = instruction.text;
+            if (!path.has_extension()) {
+                path += ".dbf";
+            }
+            if (path.is_relative()) {
+                path = working_directory / path;
+            }
+
+            WorkArea& area = active_work_area();
+            area.table = std::make_unique<DbfTable>(path);
+            area.index.reset();
+            area.filter.reset();
+            area.found = false;
+
+            const std::string requested_alias = instruction.operand.as_string();
+            area.alias = requested_alias.empty()
+                ? upper(path.stem().string())
+                : upper(requested_alias);
+
+            ++ip;
+            break;
+        }
+
+        case OpCode::OpenIndex: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("SET INDEX TO with no table open");
+            }
+
+            std::filesystem::path path = instruction.text;
+            if (!path.has_extension()) {
+                path += ".ndx";
+            }
+            if (path.is_relative()) {
+                path = working_directory / path;
+            }
+
+            area.index = std::make_unique<NdxIndex>(path);
+            area.found = false;
+            ++ip;
+            break;
+        }
+
+        case OpCode::SetFilter: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("SET FILTER TO with no table open");
+            }
+            area.filter = instruction.embedded_program;
+            ++ip;
+            break;
+        }
+
+        case OpCode::SetDeletedVisibility:
+            hide_deleted_ = instruction.operand.as_logical();
+            ++ip;
+            break;
+
+        case OpCode::GoTop: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("GO TOP with no table open");
+            }
+            position_first_visible(area);
+            area.found = false;
+            ++ip;
+            break;
+        }
+
+        case OpCode::GoRecord: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("GO with no table open");
+            }
+
+            const double requested = pop().as_number();
+            if (requested < 0.0) {
+                throw std::runtime_error("GO requires a non-negative record number");
+            }
+
+            area.table->go_record(static_cast<std::size_t>(requested));
+            area.found = false;
+            ++ip;
+            break;
+        }
+
+        case OpCode::Skip: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("SKIP with no table open");
+            }
+
+            const double requested = pop().as_number();
+            skip_visible(area, static_cast<std::ptrdiff_t>(requested));
+            area.found = false;
+            ++ip;
+            break;
+        }
+
+        case OpCode::Seek: {
+            WorkArea& area = active_work_area();
+            if (!area.table || !area.index) {
+                throw std::runtime_error("SEEK requires an open table and active index");
+            }
+
+            const std::size_t record_number = area.index->seek(pop());
+            area.found = record_number != 0;
+            area.table->go_record(record_number);
+            ++ip;
+            break;
+        }
+
+        case OpCode::DeleteRecord: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("DELETE with no table open");
+            }
+            area.table->set_deleted(true);
+            ++ip;
+            break;
+        }
+
+        case OpCode::RecallRecord: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("RECALL with no table open");
+            }
+            area.table->set_deleted(false);
+            ++ip;
+            break;
+        }
+
+        case OpCode::ReplaceField: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("REPLACE with no table open");
+            }
+            area.table->replace(instruction.text, pop());
+            ++ip;
+            break;
+        }
+
+        case OpCode::Print:
+            output_ << pop().as_string() << '\n';
+            ++ip;
+            break;
+
+        case OpCode::UnaryNot:
+            stack_.push_back(Value(!pop().as_logical()));
+            ++ip;
+            break;
+
+        case OpCode::LogicalAnd: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_logical() && rhs.as_logical()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::LogicalOr: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_logical() || rhs.as_logical()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Add: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_number() + rhs.as_number()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Subtract: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_number() - rhs.as_number()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Multiply: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_number() * rhs.as_number()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Divide: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            if (rhs.as_number() == 0.0) {
+                throw std::runtime_error("division by zero");
+            }
+            stack_.push_back(Value(lhs.as_number() / rhs.as_number()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Greater: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_number() > rhs.as_number()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Less: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_number() < rhs.as_number()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Equal: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+
+            if (std::holds_alternative<std::string>(lhs.storage()) ||
+                std::holds_alternative<std::string>(rhs.storage())) {
+                stack_.push_back(Value(lhs.as_string() == rhs.as_string()));
+            } else {
+                stack_.push_back(Value(
+                    std::fabs(lhs.as_number() - rhs.as_number()) < 1e-12));
+            }
+            ++ip;
+            break;
+        }
+
+        case OpCode::Jump:
+            ip = instruction.target;
+            break;
+
+        case OpCode::JumpIfFalse:
+            ip = pop().as_logical() ? ip + 1 : instruction.target;
+            break;
+
+        case OpCode::SetFound:
+            active_work_area().found = pop().as_logical();
+            ++ip;
+            break;
+
+        case OpCode::CallEof: {
+            const WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("EOF() with no table open");
+            }
+            stack_.push_back(Value(area.table->eof()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::CallBof: {
+            const WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("BOF() with no table open");
+            }
+            stack_.push_back(Value(area.table->bof()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::CallFound:
+            stack_.push_back(Value(active_work_area().found));
+            ++ip;
+            break;
+
+        case OpCode::CallRecno: {
+            const WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("RECNO() with no table open");
+            }
+            stack_.push_back(Value(static_cast<double>(area.table->recno())));
+            ++ip;
+            break;
+        }
+
+        case OpCode::CallReccount: {
+            const WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("RECCOUNT() with no table open");
+            }
+            stack_.push_back(Value(static_cast<double>(area.table->reccount())));
+            ++ip;
+            break;
+        }
+
+        case OpCode::CallDeleted: {
+            const WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("DELETED() with no table open");
+            }
+            stack_.push_back(Value(area.table->deleted()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Halt:
+            return;
+        }
+    }
+}
+
+const std::unordered_map<std::string, Value>& Vm::variables() const noexcept {
+    return variables_;
+}
+
+Value Vm::pop() {
+    if (stack_.empty()) {
+        throw std::runtime_error("VM stack underflow");
+    }
+
+    Value value = std::move(stack_.back());
+    stack_.pop_back();
+    return value;
+}
+
+Vm::WorkArea& Vm::active_work_area() {
+    return work_areas_[active_area_];
+}
+
+const Vm::WorkArea& Vm::active_work_area() const {
+    const auto it = work_areas_.find(active_area_);
+    if (it == work_areas_.end()) {
+        throw std::runtime_error(
+            "active work area " + std::to_string(active_area_) + " is not initialised");
+    }
+    return it->second;
+}
+
+const Vm::WorkArea& Vm::work_area_for_alias(const std::string& alias) const {
+    const std::string wanted = upper(alias);
+    for (const auto& [number, area] : work_areas_) {
+        (void)number;
+        if (!area.alias.empty() && upper(area.alias) == wanted) {
+            return area;
+        }
+    }
+
+    throw std::runtime_error("unknown work-area alias: " + alias);
+}
+
+
+Value Vm::evaluate_expression(const Program& program) const {
+    std::vector<Value> values;
+
+    const auto pop_value = [&]() {
+        if (values.empty()) {
+            throw std::runtime_error("expression stack underflow");
+        }
+        Value value = std::move(values.back());
+        values.pop_back();
+        return value;
+    };
+
+    for (std::size_t ip = 0; ip < program.code.size(); ++ip) {
+        const Instruction& instruction = program.code[ip];
+
+        switch (instruction.opcode) {
+        case OpCode::PushLiteral:
+            values.push_back(instruction.operand);
+            break;
+
+        case OpCode::LoadName:
+            values.push_back(load_name(instruction.text));
+            break;
+
+        case OpCode::UnaryNot:
+            values.push_back(Value(!pop_value().as_logical()));
+            break;
+
+        case OpCode::LogicalAnd: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_logical() && rhs.as_logical()));
+            break;
+        }
+
+        case OpCode::LogicalOr: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_logical() || rhs.as_logical()));
+            break;
+        }
+
+        case OpCode::Add: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_number() + rhs.as_number()));
+            break;
+        }
+
+        case OpCode::Subtract: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_number() - rhs.as_number()));
+            break;
+        }
+
+        case OpCode::Multiply: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_number() * rhs.as_number()));
+            break;
+        }
+
+        case OpCode::Divide: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            if (rhs.as_number() == 0.0) {
+                throw std::runtime_error("division by zero in filter expression");
+            }
+            values.push_back(Value(lhs.as_number() / rhs.as_number()));
+            break;
+        }
+
+        case OpCode::Greater: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_number() > rhs.as_number()));
+            break;
+        }
+
+        case OpCode::Less: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_number() < rhs.as_number()));
+            break;
+        }
+
+        case OpCode::Equal: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            if (std::holds_alternative<std::string>(lhs.storage()) ||
+                std::holds_alternative<std::string>(rhs.storage())) {
+                values.push_back(Value(lhs.as_string() == rhs.as_string()));
+            } else {
+                values.push_back(Value(
+                    std::fabs(lhs.as_number() - rhs.as_number()) < 1e-12));
+            }
+            break;
+        }
+
+        case OpCode::CallEof: {
+            const WorkArea& area = active_work_area();
+            values.push_back(Value(area.table ? area.table->eof() : true));
+            break;
+        }
+
+        case OpCode::CallBof: {
+            const WorkArea& area = active_work_area();
+            values.push_back(Value(area.table ? area.table->bof() : true));
+            break;
+        }
+
+        case OpCode::CallFound:
+            values.push_back(Value(active_work_area().found));
+            break;
+
+        case OpCode::CallRecno: {
+            const WorkArea& area = active_work_area();
+            values.push_back(Value(
+                area.table ? static_cast<double>(area.table->recno()) : 0.0));
+            break;
+        }
+
+        case OpCode::CallReccount: {
+            const WorkArea& area = active_work_area();
+            values.push_back(Value(
+                area.table ? static_cast<double>(area.table->reccount()) : 0.0));
+            break;
+        }
+
+        case OpCode::CallDeleted: {
+            const WorkArea& area = active_work_area();
+            values.push_back(Value(area.table ? area.table->deleted() : false));
+            break;
+        }
+
+        case OpCode::Halt:
+            if (values.empty()) {
+                return {};
+            }
+            return values.back();
+
+        default:
+            throw std::runtime_error("unsupported opcode in filter expression");
+        }
+    }
+
+    return values.empty() ? Value{} : values.back();
+}
+
+bool Vm::filter_matches(const WorkArea& area) const {
+    if (!area.filter) {
+        return true;
+    }
+
+    if (!area.table || area.table->bof() || area.table->eof()) {
+        return false;
+    }
+
+    return evaluate_expression(*area.filter).as_logical();
+}
+
+bool Vm::record_visible(const WorkArea& area) const {
+    if (!area.table || area.table->bof() || area.table->eof()) {
+        return false;
+    }
+
+    if (hide_deleted_ && area.table->deleted()) {
+        return false;
+    }
+
+    return filter_matches(area);
+}
+
+void Vm::position_first_visible(WorkArea& area) {
+    area.table->go_top();
+
+    while (!area.table->eof() && !record_visible(area)) {
+        area.table->skip(1);
+    }
+}
+
+void Vm::skip_visible(WorkArea& area, std::ptrdiff_t count) {
+    if (count == 0) {
+        return;
+    }
+
+    if (!area.filter && !hide_deleted_) {
+        area.table->skip(count);
+        return;
+    }
+
+    const std::ptrdiff_t direction = count > 0 ? 1 : -1;
+    const std::size_t matches_to_skip =
+        static_cast<std::size_t>(count > 0 ? count : -count);
+
+    for (std::size_t moved = 0; moved < matches_to_skip; ++moved) {
+        area.table->skip(direction);
+
+        while (!area.table->bof() && !area.table->eof() &&
+               !record_visible(area)) {
+            area.table->skip(direction);
+        }
+
+        if (area.table->bof() || area.table->eof()) {
+            return;
+        }
+    }
+}
+
+Value Vm::load_name(const std::string& name) const {
+    const std::string folded = upper(name);
+
+    const auto variable = variables_.find(folded);
+    if (variable != variables_.end()) {
+        return variable->second;
+    }
+
+    const auto alias_separator = folded.find("->");
+    if (alias_separator != std::string::npos) {
+        const std::string alias = trim(folded.substr(0, alias_separator));
+        const std::string field = trim(folded.substr(alias_separator + 2));
+        const WorkArea& area = work_area_for_alias(alias);
+        if (!area.table) {
+            throw std::runtime_error("alias has no table open: " + alias);
+        }
+        return area.table->field(field);
+    }
+
+    const WorkArea& area = active_work_area();
+    if (area.table) {
+        return area.table->field(folded);
+    }
+
+    throw std::runtime_error("unknown name: " + name);
+}
+
+} // namespace xabl
