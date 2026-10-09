@@ -125,12 +125,22 @@ enum class OpCode {
     Halt
 };
 
+/// Source coordinates in an original PRG buffer. Both are 1-based.
+/// Zero/zero indicates bytecode without a source statement (e.g. HALT).
+/// Columns currently identify the beginning of a statement, not each token.
+struct SourceLocation {
+    std::size_t line{};
+    std::size_t column{};
+    bool operator==(const SourceLocation&) const = default;
+};
+
 struct Instruction {
     OpCode opcode{};
     Value operand{};
     std::string text{};
     std::size_t target{};
     std::shared_ptr<const Program> embedded_program{};
+    SourceLocation source{};
 };
 
 class Program {
