@@ -79,3 +79,11 @@ add_test(
     COMMAND xabl_ndx_navigation_tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures
 )
 set_tests_properties(xabl_ndx_navigation PROPERTIES DEPENDS xabl_fixture_generate)
+
+add_executable(xabl_source_comments_tests tests/test_source_comments.cpp)
+target_link_libraries(xabl_source_comments_tests PRIVATE xabl_core)
+add_test(
+    NAME xabl_source_comments
+    COMMAND xabl_source_comments_tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures
+)
+set_tests_properties(xabl_source_comments PROPERTIES DEPENDS xabl_fixture_generate)
