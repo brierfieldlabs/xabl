@@ -98,6 +98,24 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        const xabl::Program work_area_program =
+            compiler.compile(read_text(fixtures / "legacy-work-areas.prg"));
+
+        std::ostringstream work_area_output;
+        xabl::Vm work_area_vm(work_area_output);
+        work_area_vm.run(work_area_program, fixtures);
+
+        const std::string expected_work_areas =
+            "Bob\n"
+            "Alice\n"
+            "Bob\n";
+
+        if (work_area_output.str() != expected_work_areas) {
+            std::cerr << "unexpected work-area output\nExpected:\n"
+                      << expected_work_areas << "Actual:\n" << work_area_output.str();
+            return 1;
+        }
+
         std::cout << "XABL smoke test passed\n";
         return 0;
     } catch (const std::exception& ex) {

@@ -165,6 +165,12 @@ private:
             }
 
             if (!quoted && expression.compare(i, op.size(), op) == 0) {
+                if (op == ">" && i > 0 && expression[i - 1] == '-') {
+                    continue;
+                }
+                if (op == "-" && i + 1 < expression.size() && expression[i + 1] == '>') {
+                    continue;
+                }
                 return i;
             }
         }
@@ -191,6 +197,12 @@ private:
             }
 
             if (!quoted && expression.compare(i, op.size(), op) == 0) {
+                if (op == ">" && i > 0 && expression[i - 1] == '-') {
+                    continue;
+                }
+                if (op == "-" && i + 1 < expression.size() && expression[i + 1] == '>') {
+                    continue;
+                }
                 found = i;
             }
         }
@@ -310,8 +322,26 @@ Program Compiler::compile(std::string_view source) const {
 
         try {
             if (starts_with_ci(line, "USE ")) {
+                const std::string remainder = trim(line.substr(4));
+                const std::string folded = upper(remainder);
+                const std::string marker = " ALIAS ";
+                const auto alias_pos = folded.find(marker);
+
+                std::string table_name = remainder;
+                std::string alias;
+                if (alias_pos != std::string::npos) {
+                    table_name = trim(remainder.substr(0, alias_pos));
+                    alias = trim(remainder.substr(alias_pos + marker.size()));
+                }
+
                 program.code.push_back(
-                    {OpCode::OpenTable, {}, basename_without_extension(line.substr(4))});
+                    {OpCode::OpenTable, Value(alias), basename_without_extension(table_name)});
+                continue;
+            }
+
+            if (starts_with_ci(line, "SELECT ")) {
+                program.code.push_back(
+                    {OpCode::SelectArea, {}, trim(line.substr(7))});
                 continue;
             }
 
@@ -808,6 +838,36 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             ++ip;
             break;
 
+        case OpCode::SelectArea: {
+            const std::string selector = trim(instruction.text);
+            char* end = nullptr;
+            const long numeric = std::strtol(selector.c_str(), &end, 10);
+
+            if (end != nullptr && *end == '\0') {
+                if (numeric <= 0) {
+                    throw std::runtime_error("SELECT requires a positive work area");
+                }
+                active_area_ = static_cast<int>(numeric);
+                work_areas_.try_emplace(active_area_);
+            } else {
+                const std::string wanted = upper(selector);
+                bool matched = false;
+                for (const auto& [number, area] : work_areas_) {
+                    if (!area.alias.empty() && upper(area.alias) == wanted) {
+                        active_area_ = number;
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    throw std::runtime_error("unknown work-area alias: " + selector);
+                }
+            }
+
+            ++ip;
+            break;
+        }
+
         case OpCode::OpenTable: {
             std::filesystem::path path = instruction.text;
             if (!path.has_extension()) {
@@ -816,15 +876,24 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             if (path.is_relative()) {
                 path = working_directory / path;
             }
-            table_ = std::make_unique<DbfTable>(path);
-            index_.reset();
-            found_ = false;
+
+            WorkArea& area = active_work_area();
+            area.table = std::make_unique<DbfTable>(path);
+            area.index.reset();
+            area.found = false;
+
+            const std::string requested_alias = instruction.operand.as_string();
+            area.alias = requested_alias.empty()
+                ? upper(path.stem().string())
+                : upper(requested_alias);
+
             ++ip;
             break;
         }
 
         case OpCode::OpenIndex: {
-            if (!table_) {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
                 throw std::runtime_error("SET INDEX TO with no table open");
             }
 
@@ -836,48 +905,56 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
                 path = working_directory / path;
             }
 
-            index_ = std::make_unique<NdxIndex>(path);
-            found_ = false;
+            area.index = std::make_unique<NdxIndex>(path);
+            area.found = false;
             ++ip;
             break;
         }
 
-        case OpCode::GoTop:
-            if (!table_) {
+        case OpCode::GoTop: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
                 throw std::runtime_error("GO TOP with no table open");
             }
-            table_->go_top();
+            area.table->go_top();
+            area.found = false;
             ++ip;
             break;
+        }
 
-        case OpCode::Skip:
-            if (!table_) {
+        case OpCode::Skip: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
                 throw std::runtime_error("SKIP with no table open");
             }
-            table_->skip();
-            found_ = false;
+            area.table->skip();
+            area.found = false;
             ++ip;
             break;
+        }
 
         case OpCode::Seek: {
-            if (!table_ || !index_) {
+            WorkArea& area = active_work_area();
+            if (!area.table || !area.index) {
                 throw std::runtime_error("SEEK requires an open table and active index");
             }
 
-            const std::size_t record_number = index_->seek(pop());
-            found_ = record_number != 0;
-            table_->go_record(record_number);
+            const std::size_t record_number = area.index->seek(pop());
+            area.found = record_number != 0;
+            area.table->go_record(record_number);
             ++ip;
             break;
         }
 
-        case OpCode::ReplaceField:
-            if (!table_) {
+        case OpCode::ReplaceField: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
                 throw std::runtime_error("REPLACE with no table open");
             }
-            table_->replace(instruction.text, pop());
+            area.table->replace(instruction.text, pop());
             ++ip;
             break;
+        }
 
         case OpCode::Print:
             output_ << pop().as_string() << '\n';
@@ -921,80 +998,3 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             }
             stack_.push_back(Value(lhs.as_number() / rhs.as_number()));
             ++ip;
-            break;
-        }
-
-        case OpCode::Greater: {
-            const Value rhs = pop();
-            const Value lhs = pop();
-            stack_.push_back(Value(lhs.as_number() > rhs.as_number()));
-            ++ip;
-            break;
-        }
-
-        case OpCode::Less: {
-            const Value rhs = pop();
-            const Value lhs = pop();
-            stack_.push_back(Value(lhs.as_number() < rhs.as_number()));
-            ++ip;
-            break;
-        }
-
-        case OpCode::Equal: {
-            const Value rhs = pop();
-            const Value lhs = pop();
-
-            if (std::holds_alternative<std::string>(lhs.storage()) ||
-                std::holds_alternative<std::string>(rhs.storage())) {
-                stack_.push_back(Value(lhs.as_string() == rhs.as_string()));
-            } else {
-                stack_.push_back(Value(
-                    std::fabs(lhs.as_number() - rhs.as_number()) < 1e-12));
-            }
-            ++ip;
-            break;
-        }
-
-        case OpCode::Jump:
-            ip = instruction.target;
-            break;
-
-        case OpCode::JumpIfFalse:
-            ip = pop().as_logical() ? ip + 1 : instruction.target;
-            break;
-
-        case OpCode::CallEof:
-            if (!table_) {
-                throw std::runtime_error("EOF() with no table open");
-            }
-            stack_.push_back(Value(table_->eof()));
-            ++ip;
-            break;
-
-        case OpCode::CallFound:
-            stack_.push_back(Value(found_));
-            ++ip;
-            break;
-
-        case OpCode::Halt:
-            return;
-        }
-    }
-}
-
-const std::unordered_map<std::string, Value>& Vm::variables() const noexcept {
-    return variables_;
-}
-
-Value Vm::pop() {
-    if (stack_.empty()) {
-        throw std::runtime_error("VM stack underflow");
-    }
-
-    Value value = std::move(stack_.back());
-    stack_.pop_back();
-    return value;
-}
-
-Value Vm::load_name(const std::string& name) const {
-    const std::string folded = upper(name);

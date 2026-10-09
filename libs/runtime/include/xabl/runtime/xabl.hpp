@@ -44,6 +44,7 @@ enum class OpCode {
     StoreName,
     OpenTable,
     OpenIndex,
+    SelectArea,
     GoTop,
     Skip,
     Seek,
@@ -140,15 +141,24 @@ public:
     [[nodiscard]] const std::unordered_map<std::string, Value>& variables() const noexcept;
 
 private:
+    struct WorkArea {
+        std::unique_ptr<DbfTable> table;
+        std::unique_ptr<NdxIndex> index;
+        std::string alias;
+        bool found{false};
+    };
+
     std::ostream& output_;
     std::vector<Value> stack_;
     std::unordered_map<std::string, Value> variables_;
-    std::unique_ptr<DbfTable> table_;
-    std::unique_ptr<NdxIndex> index_;
-    bool found_{false};
+    std::unordered_map<int, WorkArea> work_areas_;
+    int active_area_{1};
 
     Value pop();
     [[nodiscard]] Value load_name(const std::string& name) const;
+    [[nodiscard]] WorkArea& active_work_area();
+    [[nodiscard]] const WorkArea& active_work_area() const;
+    [[nodiscard]] const WorkArea& work_area_for_alias(const std::string& alias) const;
 };
 
 } // namespace xabl
