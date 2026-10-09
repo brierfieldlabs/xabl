@@ -7,6 +7,11 @@ independent original-product reference files are still outstanding.
 
 ## Supported in these slices
 
+- PRG line comments starting with `*`, `NOTE` and `&&`; inline
+  `&&` comments are stripped without damaging quoted literals. Bare
+  `?` prints a blank line, while `?expression` works without a space.
+  Semicolon line continuation remains unimplemented.
+
 - The character `+` and `-` operators concatenate strings.
   Plus preserves both operands verbatim; minus moves trailing ASCII
   spaces from the left operand behind the concatenated right operand.

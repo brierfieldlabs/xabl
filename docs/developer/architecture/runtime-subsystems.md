@@ -40,3 +40,6 @@ nested expressions. Keep legacy dialect differences explicit.
 
 The DBF physical append/close/navigation slice is documented in
 `docs/developer/compatibility/dbase-iii-plus.md`.
+
+The line-oriented compiler strips quote-aware PRG comments before
+statement dispatch (see `docs/decisions/2026-10-09-prg-comments.md`).

@@ -15,6 +15,34 @@
 
 namespace xabl {
 namespace {
+
+// dBASE III PLUS source comments are stripped before command recognition.
+// A doubled matching quote is part of a string, never a comment delimiter.
+std::string without_inline_comment(std::string_view source) {
+    char quote = 0;
+    for (std::size_t i = 0; i < source.size(); ++i) {
+        const char c = source[i];
+        if (quote != 0) {
+            if (c == quote) {
+                if (i + 1 < source.size() && source[i + 1] == quote) {
+                    ++i; // doubled delimiters escape the quote
+                } else {
+                    quote = 0;
+                }
+            }
+            continue;
+        }
+        if (c == '\'' || c == '"') {
+            quote = c;
+            continue;
+        }
+        if (c == '&' && i + 1 < source.size() && source[i + 1] == '&') {
+            return std::string(source.substr(0, i));
+        }
+    }
+    return std::string(source);
+}
+
 struct Block {
     enum class Kind { If, DoWhile };
     Kind kind;
@@ -86,9 +114,10 @@ Program Compiler::compile(std::string_view source) const {
 
     while (std::getline(input, raw_line)) {
         ++line_number;
-        std::string line = trim(raw_line);
+        std::string line = trim(without_inline_comment(raw_line));
 
-        if (line.empty() || line.front() == '*') {
+        if (line.empty() || line.front() == '*' ||
+            equal_ci(line, "NOTE") || starts_with_ci(line, "NOTE ")) {
             continue;
         }
 
@@ -238,8 +267,14 @@ Program Compiler::compile(std::string_view source) const {
                 continue;
             }
 
-            if (starts_with_ci(line, "? ")) {
-                expression_compiler.emit(line.substr(2));
+            if (line.front() == '?') {
+                if (line == "?") {
+                    // A bare ? emits a blank output line.
+                    program.code.push_back(
+                        {OpCode::PushLiteral, Value(std::string{})});
+                } else {
+                    expression_compiler.emit(trim(line.substr(1)));
+                }
                 program.code.push_back({OpCode::Print});
                 continue;
             }
