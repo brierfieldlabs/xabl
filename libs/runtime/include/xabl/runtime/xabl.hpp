@@ -104,6 +104,7 @@ enum class OpCode {
     CallMax,
     CallAsc,
     CallChr,
+    CallStuff,
     Halt
 };
 

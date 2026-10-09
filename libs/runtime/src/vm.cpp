@@ -380,6 +380,17 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::CallStuff: {
+            const Value replacement = pop();
+            const Value quantity = pop();
+            const Value start = pop();
+            const Value target = pop();
+            stack_.push_back(apply_stuff_function(
+                target, start, quantity, replacement));
+            ++ip;
+            break;
+        }
+
         case OpCode::Print:
             output_ << pop().as_string() << '\n';
             ++ip;
@@ -664,6 +675,16 @@ Value Vm::evaluate_expression(const Program& program) const {
             const Value left = pop_value();
             values.push_back(apply_minmax_function(
                 instruction.opcode, left, right));
+            break;
+        }
+
+        case OpCode::CallStuff: {
+            const Value replacement = pop_value();
+            const Value quantity = pop_value();
+            const Value start = pop_value();
+            const Value target = pop_value();
+            values.push_back(apply_stuff_function(
+                target, start, quantity, replacement));
             break;
         }
 
