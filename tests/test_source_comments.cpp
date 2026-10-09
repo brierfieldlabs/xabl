@@ -26,7 +26,8 @@ int main(int argc, char** argv) {
         vm.run(compiler.compile(read_fixture(directory / "legacy-comments.prg")),
                directory);
         const std::string expected =
-            "100\ntwo&&three\nDon't && quit\n5\n\nOK\nA&&B\nCharlie\n";
+            "100\ntwo&&three\nDon't && quit\n5\n\nOK\nA&&B\n"
+            "A TO B\nREADY TO GO\nA' TO 'B\nCharlie\n";
         if (output.str() != expected) {
             throw std::runtime_error("comment fixture output mismatch: " +
                                      output.str());

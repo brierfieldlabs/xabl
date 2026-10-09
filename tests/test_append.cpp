@@ -336,6 +336,16 @@ int main(int argc, char** argv) {
                 "AT substring search in filters failed: " +
                     search_output.str());
 
+        std::ostringstream with_output;
+        xabl::Vm with_vm(with_output);
+        with_vm.run(compiler.compile(
+            "USE branch\nGO TOP\n"
+            "REPLACE STATUS WITH UPPER('with note')\n"
+            "? STATUS\nUSE\n"), temp.path);
+        require(with_output.str() == "WITH NOTE\n",
+                "quoted WITH in REPLACE expression parsed incorrectly: " +
+                    with_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

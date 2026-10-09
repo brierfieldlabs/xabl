@@ -43,3 +43,7 @@ The DBF physical append/close/navigation slice is documented in
 
 The line-oriented compiler strips quote-aware PRG comments before
 statement dispatch (see `docs/decisions/2026-10-09-prg-comments.md`).
+
+The command compiler uses quote-aware top-level keyword searches for
+STORE/REPLACE/USE clauses, documented in
+`docs/decisions/2026-10-09-command-delimiters.md`.

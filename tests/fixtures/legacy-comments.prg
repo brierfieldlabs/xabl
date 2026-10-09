@@ -13,6 +13,12 @@ ELSE && unexecuted branch
 ENDIF && close block
 STORE "A&&B" TO LABEL && quotation must remain intact
 ?LABEL && immediate variable print
+STORE "A TO B" TO MESSAGE && TO inside a quoted value is not a separator
+? MESSAGE
+STORE UPPER("ready TO go") TO MESSAGE && TO inside a nested function
+? MESSAGE
+STORE 'A'' TO ''B' TO MESSAGE && doubled quote escaping
+? MESSAGE
 USE customers && open a table
 SET FILTER TO LEFT(NAME,1) == 'C' && filter expression
 GO TOP && move in view

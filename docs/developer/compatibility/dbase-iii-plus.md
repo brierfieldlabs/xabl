@@ -11,6 +11,9 @@ independent original-product reference files are still outstanding.
   `&&` comments are stripped without damaging quoted literals. Bare
   `?` prints a blank line, while `?expression` works without a space.
   Semicolon line continuation remains unimplemented.
+- STORE TO, REPLACE WITH and USE ALIAS separators are now recognised
+  outside quoted character expressions and parenthesised calls; embedded
+  keyword text is retained as a literal, not a spurious clause.
 
 - Basic character `>`, `<`, `>=`, `<=` relational comparisons
   now use unsigned bytewise lexical ordering. The traditional `#`
