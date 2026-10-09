@@ -5,12 +5,14 @@ the project's governing direction, but **support remains incomplete**.
 A version-specific compatibility object and independent original-product
 reference files are still outstanding.
 
-## Supported in this slice
+## Supported in these slices
 
 - `SET EXACT ON/OFF`: global character equality mode; OFF (default)
   compares the left string against the right prefix, ON compares after
   trimming trailing ASCII spaces. `==` is separate strict byte equality.
   Filter programs share the same runtime setting.
+- `IF/ELSE/ENDIF` and `DO WHILE/LOOP/EXIT/ENDDO`: nested control
+  flow, condition rechecking and early-loop exit.
 - `APPEND BLANK`: append a physical blank DBF record, update the 32-bit
   header record count and the last-update date, retain/write the 0x1A EOF byte,
   and leave the record pointer on the new row.

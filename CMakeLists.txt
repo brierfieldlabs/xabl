@@ -58,3 +58,11 @@ add_test(
     COMMAND xabl_append_tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures
 )
 set_tests_properties(xabl_append PROPERTIES DEPENDS xabl_fixture_generate)
+
+add_executable(xabl_control_flow_tests tests/test_control_flow.cpp)
+target_link_libraries(xabl_control_flow_tests PRIVATE xabl_core)
+add_test(
+    NAME xabl_control_flow
+    COMMAND xabl_control_flow_tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures
+)
+set_tests_properties(xabl_control_flow PROPERTIES DEPENDS xabl_fixture_generate)
