@@ -1,0 +1,35 @@
+* A small dBASE III PLUS-style customer ledger.
+* Test harness copies input DBFs first; do not run against live files.
+USE ledger ALIAS ACCOUNTS
+SET DELETED ON
+GO TOP
+STORE 0 TO review_total
+DO WHILE .NOT. EOF()
+    IF BALANCE > 100
+        review_total = review_total + BALANCE
+        REPLACE STATUS WITH "REVIEW"
+    ENDIF
+    SKIP
+ENDDO
+? review_total
+APPEND BLANK
+REPLACE NAME WITH "Doris"
+REPLACE BALANCE WITH 55.5
+REPLACE STATUS WITH "NEW"
+? RECNO()
+SELECT 2
+USE branch ALIAS BRANCH
+GO BOTTOM
+? NAME
+SELECT ACCOUNTS
+SET FILTER TO STATUS = "REVIEW"
+GO BOTTOM
+? NAME
+SET FILTER TO
+LOCATE FOR NAME = "Doris"
+? FOUND()
+? NAME
+USE
+SELECT BRANCH
+GO TOP
+? NAME

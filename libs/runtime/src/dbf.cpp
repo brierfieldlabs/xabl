@@ -5,6 +5,9 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <chrono>
+#include <cstdint>
+#include <limits>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -49,6 +52,95 @@ std::size_t DbfTable::reccount() const noexcept {
 void DbfTable::go_top() noexcept {
     before_first_ = false;
     current_ = 0;
+}
+
+void DbfTable::go_bottom() noexcept {
+    before_first_ = false;
+    current_ = records_.empty() ? 0 : records_.size() - 1;
+}
+
+// Append one physical DBF record, retaining legacy record numbers. DBF III
+// conventionally terminates its data with an optional 0x1A EOF byte.
+// Refuse unknown trailing data rather than corrupting proprietary extensions.
+// This implementation is deliberately single-writer; locking and indexed
+// write maintenance are separate work.
+void DbfTable::append_blank() {
+    if (records_.size() >= std::numeric_limits<std::uint32_t>::max()) {
+        throw std::runtime_error("DBF record count overflow");
+    }
+    std::fstream file(path_, std::ios::in | std::ios::out | std::ios::binary);
+    if (!file) {
+        throw std::runtime_error("cannot append to DBF table: " + path_.string());
+    }
+    unsigned char header[32]{};
+    file.read(reinterpret_cast<char*>(header), sizeof(header));
+    if (!file) throw std::runtime_error("truncated DBF header before append");
+    const std::size_t header_length =
+        static_cast<std::size_t>(header[8]) |
+        (static_cast<std::size_t>(header[9]) << 8);
+    const std::uint32_t existing_count =
+        static_cast<std::uint32_t>(header[4]) |
+        (static_cast<std::uint32_t>(header[5]) << 8) |
+        (static_cast<std::uint32_t>(header[6]) << 16) |
+        (static_cast<std::uint32_t>(header[7]) << 24);
+    if (existing_count != records_.size() || record_length_ == 0) {
+        throw std::runtime_error("DBF changed on disk before append");
+    }
+
+    const auto position = static_cast<std::streamoff>(header_length) +
+                          static_cast<std::streamoff>(records_.size()) *
+                              static_cast<std::streamoff>(record_length_);
+    file.seekg(0, std::ios::end);
+    const auto size = file.tellg();
+    if (size < position || size > position + 1) {
+        throw std::runtime_error("unexpected DBF trailer; append refused");
+    }
+    if (size == position + 1) {
+        file.seekg(position);
+        char marker{};
+        file.get(marker);
+        if (!file || static_cast<unsigned char>(marker) != 0x1A) {
+            throw std::runtime_error("unknown DBF trailing byte; append refused");
+        }
+    }
+
+    std::vector<char> record(record_length_, ' ');
+    for (const Field& field_info : fields_) {
+        if (field_info.offset >= record_length_ ||
+            field_info.length > record_length_ - field_info.offset) {
+            throw std::runtime_error("invalid DBF field layout; append refused");
+        }
+        if (field_info.type == 'L') {
+            record[field_info.offset] = '?'; // uninitialised logical value
+        }
+    }
+
+    file.clear();
+    file.seekp(position);
+    file.write(record.data(), static_cast<std::streamsize>(record.size()));
+    file.put(static_cast<char>(0x1A));
+    file.flush();
+    if (!file) throw std::runtime_error("failed writing appended DBF record");
+
+    const auto now = std::chrono::floor<std::chrono::days>(
+        std::chrono::system_clock::now());
+    const auto date = std::chrono::year_month_day(now);
+    const auto year = static_cast<int>(date.year()) - 1900;
+    const auto count = static_cast<std::uint32_t>(records_.size() + 1);
+    header[1] = static_cast<unsigned char>(year);
+    header[2] = static_cast<unsigned char>(static_cast<unsigned>(date.month()));
+    header[3] = static_cast<unsigned char>(static_cast<unsigned>(date.day()));
+    for (int i = 0; i < 4; ++i) {
+        header[4 + i] = static_cast<unsigned char>((count >> (8 * i)) & 0xFF);
+    }
+    file.seekp(1);
+    file.write(reinterpret_cast<const char*>(header + 1), 7);
+    file.flush();
+    if (!file) throw std::runtime_error("failed updating DBF record count");
+
+    records_.push_back(std::move(record));
+    before_first_ = false;
+    current_ = records_.size() - 1;
 }
 
 void DbfTable::skip(std::ptrdiff_t count) noexcept {

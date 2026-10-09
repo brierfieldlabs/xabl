@@ -37,3 +37,6 @@ and NDX files before the smoke tests. Avoid silently changing:
 When adding lexical/parser structure, first preserve existing compatibility
 fixtures and add regression examples for operator precedence, quoting and
 nested expressions. Keep legacy dialect differences explicit.
+
+The DBF physical append/close/navigation slice is documented in
+`docs/developer/compatibility/dbase-iii-plus.md`.

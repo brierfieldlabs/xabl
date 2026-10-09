@@ -86,6 +86,26 @@ Program Compiler::compile(std::string_view source) const {
         }
 
         try {
+            if (equal_ci(line, "USE")) {
+                program.code.push_back({OpCode::CloseTable});
+                continue;
+            }
+
+            if (equal_ci(line, "SET INDEX TO")) {
+                program.code.push_back({OpCode::CloseIndex});
+                continue;
+            }
+
+            if (equal_ci(line, "APPEND BLANK")) {
+                program.code.push_back({OpCode::AppendBlank});
+                continue;
+            }
+
+            if (equal_ci(line, "GO BOTTOM") || equal_ci(line, "GOTO BOTTOM")) {
+                program.code.push_back({OpCode::GoBottom});
+                continue;
+            }
+
             if (starts_with_ci(line, "USE ")) {
                 const std::string remainder = trim(line.substr(4));
                 const std::string folded = upper(remainder);

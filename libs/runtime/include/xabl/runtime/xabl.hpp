@@ -45,12 +45,16 @@ enum class OpCode {
     LoadName,
     StoreName,
     OpenTable,
+    CloseTable,
     OpenIndex,
+    CloseIndex,
     SetFilter,
     SetDeletedVisibility,
     SelectArea,
     GoTop,
+    GoBottom,
     GoRecord,
+    AppendBlank,
     Skip,
     Seek,
     DeleteRecord,
@@ -108,6 +112,8 @@ public:
     [[nodiscard]] std::size_t reccount() const noexcept;
 
     void go_top() noexcept;
+    void go_bottom() noexcept;
+    void append_blank();
     void go_record(std::size_t one_based_record_number);
     void skip(std::ptrdiff_t count = 1) noexcept;
     void set_deleted(bool deleted);
@@ -187,6 +193,7 @@ private:
     [[nodiscard]] bool filter_matches(const WorkArea& area) const;
     [[nodiscard]] bool record_visible(const WorkArea& area) const;
     void position_first_visible(WorkArea& area);
+    void position_last_visible(WorkArea& area);
     void skip_visible(WorkArea& area, std::ptrdiff_t count);
 };
 
