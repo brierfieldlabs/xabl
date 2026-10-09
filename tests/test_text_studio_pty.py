@@ -57,8 +57,12 @@ def main() -> int:
 
         try:
             fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 25, 100, 0, 0))
-            wait_for(b"XABL Text Studio")
-            wait_for(b"F1 Help")
+            # The terminal may draw the title and footer in one read.
+            # Search both within the full initial-screen window, rather
+            # than starting the footer search after title detection.
+            startup_mark = len(transcript)
+            wait_for(b"XABL Text Studio", since=startup_mark)
+            wait_for(b"F1 Help", since=startup_mark)
             browser_mark = len(transcript)
             send(b"\x1bOQ")  # F2 in xterm-256color: file browser
             wait_for(b"FILE BROWSER", since=browser_mark)
