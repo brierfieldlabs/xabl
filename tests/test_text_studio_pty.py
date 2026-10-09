@@ -30,11 +30,15 @@ def main() -> int:
             os.execv(sys.argv[1], [sys.argv[1], str(source)])
         transcript = bytearray()
 
-        def wait_for(token: bytes, timeout: float = 5.0) -> None:
-            start = len(transcript)
+        def wait_for(token: bytes, timeout: float = 5.0,
+                     since: int | None = None) -> None:
+            # One PTY read can contain several screen updates. Use the
+            # operation's launch marker to match text in the complete
+            # post-action window, even when earlier waits consumed it.
+            start = len(transcript) if since is None else since
             end = time.monotonic() + timeout
             while time.monotonic() < end:
-                if token in transcript[max(start - 100, 0):]:
+                if token in transcript[start:]:
                     return
                 try:
                     if select.select([fd], [], [], 0.1)[0]:
@@ -54,9 +58,10 @@ def main() -> int:
             fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 25, 100, 0, 0))
             wait_for(b"XABL Text Studio")
             wait_for(b"F1 Help")
+            browser_mark = len(transcript)
             send(b"\x1bOQ")  # F2 in xterm-256color: file browser
-            wait_for(b"FILE BROWSER")
-            wait_for(b"program.prg")
+            wait_for(b"FILE BROWSER", since=browser_mark)
+            wait_for(b"program.prg", since=browser_mark)
             send(b"\x1bOB")  # xterm application-cursor Down in curses mode
             send(b"\r")      # open highlighted source file
             wait_for(b"Opened ")
