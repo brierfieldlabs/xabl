@@ -58,3 +58,8 @@ Keep the lexer isolated from command-level grammar and retain the
 `xabl_expressions` CTest suite. Add dialect-specific fixtures before
 broadening supported syntax; don't let modern C++ semantics silently
 override historical language behavior.
+
+STR now takes one to three nested expression arguments, recording the
+actual arity in its bytecode instruction. VAL is exactly one-argument.
+The full VM and embedded DBF-filter evaluator share numeric conversion
+logic in numeric_functions.hpp.

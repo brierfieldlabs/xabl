@@ -515,6 +515,19 @@ int main(int argc, char** argv) {
                     "\n.T.\n.F.\n.T.\n20\n.T.\n",
                 "LEN, TRIM, RIGHT or displayed DBF padding is inconsistent");
 
+        // The same conversion opcodes must work inside compiled DBF filters.
+        std::ostringstream conversion_output;
+        xabl::Vm conversion_vm(conversion_output);
+        conversion_vm.run(compiler.compile(
+            "USE branch\n"
+            "SET FILTER TO VAL(TRIM(STR(BALANCE,10,2))) > 100\n"
+            "GO TOP\n? TRIM(NAME)\n"
+            "SKIP\n? TRIM(NAME)\n"
+            "SET FILTER TO STR(BALANCE,10,2) == '    200.00'\n"
+            "GO TOP\n? TRIM(NAME)\n"), temp.path);
+        require(conversion_output.str() == "Alice\nCharlie\nCharlie\n",
+                "STR/VAL in filters failed: " + conversion_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

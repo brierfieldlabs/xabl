@@ -5,6 +5,7 @@
 #include "comparison.hpp"
 #include "text_functions.hpp"
 #include "operators.hpp"
+#include "numeric_functions.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -339,6 +340,22 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::CallVal:
+            stack_.push_back(apply_val_function(pop()));
+            ++ip;
+            break;
+
+        case OpCode::CallStr: {
+            const Value decimals = instruction.target == 3 ? pop() : Value{};
+            const Value width = instruction.target >= 2 ? pop() : Value{};
+            const Value number = pop();
+            stack_.push_back(apply_str_function(
+                number, instruction.target >= 2 ? &width : nullptr,
+                instruction.target == 3 ? &decimals : nullptr));
+            ++ip;
+            break;
+        }
+
         case OpCode::Print:
             output_ << pop().as_string() << '\n';
             ++ip;
@@ -588,6 +605,20 @@ Value Vm::evaluate_expression(const Program& program) const {
             const Value count = pop_value();
             const Value text = pop_value();
             values.push_back(apply_replicate_function(text, count));
+            break;
+        }
+
+        case OpCode::CallVal:
+            values.push_back(apply_val_function(pop_value()));
+            break;
+
+        case OpCode::CallStr: {
+            const Value decimals = instruction.target == 3 ? pop_value() : Value{};
+            const Value width = instruction.target >= 2 ? pop_value() : Value{};
+            const Value number = pop_value();
+            values.push_back(apply_str_function(
+                number, instruction.target >= 2 ? &width : nullptr,
+                instruction.target == 3 ? &decimals : nullptr));
             break;
         }
 

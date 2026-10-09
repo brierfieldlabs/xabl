@@ -109,3 +109,13 @@ spaces. LEN(NAME) reports field width, while LEN(TRIM(NAME)) reports the
 unpadded content length. Printing an untrimmed field also prints spaces.
 Legacy test programs now use TRIM() explicitly for compact names. See
 the 2026-10-09 fixed-width character-fields ADR. Codepages remain pending.
+
+## Numeric/character conversion
+
+VAL(text) converts a leading numeric prefix to a number, returning zero for
+non-numeric text. STR(number[,width[,decimals]]) returns right-aligned,
+fixed-decimal character output (default 10 characters, 0 decimals). It emits
+asterisks when a valid width is too small for the number. Invalid formatting
+width/precision is refused separately. Both functions run in ordinary and
+filter expressions. Current runtime safety limits are 1 MiB width and 18
+decimal places; these are not claimed as historical dBASE III PLUS limits.

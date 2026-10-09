@@ -257,6 +257,7 @@ private:
                     return OpCode::CallTrim;
                 if (current.text == "LTRIM") return OpCode::CallLTrim;
                 if (current.text == "SPACE") return OpCode::CallSpace;
+                if (current.text == "VAL") return OpCode::CallVal;
                 return OpCode::Halt;
             };
             if (const auto opcode = one_arg(); opcode != OpCode::Halt) {
@@ -269,6 +270,24 @@ private:
                 }
                 advance();
                 emit(opcode);
+                return;
+            }
+            // STR takes a numeric argument and up to two formatting
+            // arguments; preserve its argument count in the bytecode.
+            if (current.text == "STR") {
+                if (token_.kind == Kind::RParen) fail("STR requires a numeric argument");
+                expression(1);
+                std::size_t count = 1;
+                while (token_.kind == Kind::Comma && count < 3) {
+                    advance();
+                    expression(1);
+                    ++count;
+                }
+                if (token_.kind != Kind::RParen) fail("STR takes one to three arguments");
+                advance();
+                Instruction instruction{OpCode::CallStr};
+                instruction.target = count;
+                program_.code.push_back(std::move(instruction));
                 return;
             }
             // Search and substring functions each accept two full
