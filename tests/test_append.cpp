@@ -541,6 +541,19 @@ int main(int argc, char** argv) {
         require(numeric_output.str() == "Charlie\nCharlie\nAlice\n",
                 "numeric function filtering failed: " + numeric_output.str());
 
+        std::ostringstream codes_output;
+        xabl::Vm codes_vm(codes_output);
+        codes_vm.run(compiler.compile(
+            "USE branch\n"
+            "SET FILTER TO ASC(NAME) == 67\n"
+            "GO TOP\n? TRIM(NAME)\n"
+            "SET FILTER TO LEFT(NAME,1) == CHR(65)\n"
+            "GO TOP\n? TRIM(NAME)\n"
+            "SET FILTER TO ASC(NAME) == 66\n"
+            "GO TOP\n? TRIM(NAME)\n"), temp.path);
+        require(codes_output.str() == "Charlie\nAlice\nBob\n",
+                "ASC/CHR in filters failed: " + codes_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

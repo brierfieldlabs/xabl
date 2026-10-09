@@ -127,3 +127,12 @@ zero, and MIN()/MAX() compare two numeric arguments. All require finite
 numeric operands. They work inside SET FILTER as well as normal expressions.
 ROUND() remains pending explicit per-version tests for documented historical
 dBASE III PLUS rounding defects.
+
+## Character-code conversion
+
+ASC(text) returns the numeric byte code of the first character;
+CHR(code) creates a one-byte string from code 0..255. Extended bytes
+are preserved verbatim. These functions do not translate codepages or
+provide Unicode characters. Empty ASC inputs, non-finite/wrong-typed
+codes and out-of-range CHR inputs are rejected pending exact original
+interpreter boundary tests.

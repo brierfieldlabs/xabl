@@ -153,4 +153,26 @@ inline Value apply_replicate_function(const Value& string_arg,
     return Value(std::move(result));
 }
 
+// Character code functions operate on *stored bytes* rather than Unicode
+// code points. DOS codepage interpretation belongs to a later dialect driver.
+inline Value apply_character_code_function(OpCode opcode, const Value& argument) {
+    if (opcode == OpCode::CallAsc) {
+        const auto* value = std::get_if<std::string>(&argument.storage());
+        if (!value || value->empty()) {
+            throw std::runtime_error("ASC requires a nonempty character string");
+        }
+        return Value(static_cast<double>(
+            static_cast<unsigned char>(value->front())));
+    }
+    if (opcode == OpCode::CallChr) {
+        const auto* number = std::get_if<double>(&argument.storage());
+        if (!number || !std::isfinite(*number) || *number < 0 || *number > 255) {
+            throw std::runtime_error("CHR requires a numeric byte code from 0 to 255");
+        }
+        const auto code = static_cast<unsigned char>(std::trunc(*number));
+        return Value(std::string(1, static_cast<char>(code)));
+    }
+    throw std::runtime_error("unsupported character-code function");
+}
+
 } // namespace xabl
