@@ -19,7 +19,7 @@ namespace {
 enum class Kind {
     End, Number, String, Identifier, True, False,
     LParen, RParen, Plus, Minus, Multiply, Divide,
-    Greater, Less, Equal, NotEqual, GreaterEqual, LessEqual,
+    Greater, Less, Equal, EqualExact, NotEqual, GreaterEqual, LessEqual,
     And, Or, Not
 };
 
@@ -130,7 +130,7 @@ public:
         case '*': return {Kind::Multiply, "*", start};
         case '/': return {Kind::Divide, "/", start};
         case '=':
-            if (accept('=')) return {Kind::Equal, "==", start};
+            if (accept('=')) return {Kind::EqualExact, "==", start};
             return {Kind::Equal, "=", start};
         case '>':
             if (accept('=')) return {Kind::GreaterEqual, ">=", start};
@@ -170,6 +170,7 @@ int precedence(Kind kind) {
     case Kind::Greater:
     case Kind::Less:
     case Kind::Equal:
+    case Kind::EqualExact:
     case Kind::NotEqual:
     case Kind::GreaterEqual:
     case Kind::LessEqual: return 3;
@@ -281,6 +282,7 @@ private:
             case Kind::Greater: emit(OpCode::Greater); break;
             case Kind::Less: emit(OpCode::Less); break;
             case Kind::Equal: emit(OpCode::Equal); break;
+            case Kind::EqualExact: emit(OpCode::EqualExact); break;
             case Kind::NotEqual:
                 emit(OpCode::Equal);
                 emit(OpCode::UnaryNot);

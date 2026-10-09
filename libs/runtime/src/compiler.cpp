@@ -152,6 +152,16 @@ Program Compiler::compile(std::string_view source) const {
                 continue;
             }
 
+            if (equal_ci(line, "SET EXACT ON")) {
+                program.code.push_back({OpCode::SetExact, Value(true)});
+                continue;
+            }
+
+            if (equal_ci(line, "SET EXACT OFF")) {
+                program.code.push_back({OpCode::SetExact, Value(false)});
+                continue;
+            }
+
             if (equal_ci(line, "SET DELETED ON")) {
                 program.code.push_back(
                     {OpCode::SetDeletedVisibility, Value(true)});

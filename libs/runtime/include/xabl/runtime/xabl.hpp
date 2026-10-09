@@ -50,6 +50,7 @@ enum class OpCode {
     CloseIndex,
     SetFilter,
     SetDeletedVisibility,
+    SetExact,
     SelectArea,
     GoTop,
     GoBottom,
@@ -71,6 +72,7 @@ enum class OpCode {
     Greater,
     Less,
     Equal,
+    EqualExact,
     Jump,
     JumpIfFalse,
     SetFound,
@@ -183,6 +185,7 @@ private:
     std::unordered_map<int, WorkArea> work_areas_;
     int active_area_{1};
     bool hide_deleted_{false};
+    bool exact_{false};
 
     Value pop();
     [[nodiscard]] Value load_name(const std::string& name) const;

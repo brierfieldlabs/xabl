@@ -173,6 +173,25 @@ int main(int argc, char** argv) {
         require(content(fixtures / "customers.dbf") == original,
                 "mini-application wrote to source fixture");
 
+        // SET EXACT is global runtime state and must also be respected
+        // inside separately compiled work-area filter expressions.
+        std::ostringstream exact_output;
+        xabl::Vm exact_vm(exact_output);
+        exact_vm.run(compiler.compile(
+            "USE branch\n"
+            "SET FILTER TO NAME = 'Ali'\n"
+            "GO TOP\n"
+            "? EOF()\n"
+            "SET EXACT ON\n"
+            "GO TOP\n"
+            "? EOF()\n"
+            "SET EXACT OFF\n"
+            "GO TOP\n"
+            "? NAME\n"), temp.path);
+        require(exact_output.str() == ".F.\n.T.\nAlice\n",
+                "SET EXACT was not applied to active work-area filters: " +
+                    exact_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {
