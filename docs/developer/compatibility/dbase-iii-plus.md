@@ -7,6 +7,10 @@ reference files are still outstanding.
 
 ## Supported in this slice
 
+- `SET EXACT ON/OFF`: global character equality mode; OFF (default)
+  compares the left string against the right prefix, ON compares after
+  trimming trailing ASCII spaces. `==` is separate strict byte equality.
+  Filter programs share the same runtime setting.
 - `APPEND BLANK`: append a physical blank DBF record, update the 32-bit
   header record count and the last-update date, retain/write the 0x1A EOF byte,
   and leave the record pointer on the new row.
@@ -27,6 +31,8 @@ reference files are still outstanding.
 - The current NDX implementation is read-only. `APPEND BLANK` refuses a
   work area with an active NDX index to avoid silently stale index records.
   `GO BOTTOM` also refuses active NDX until indexed-order navigation exists.
+- String ordering, collations, locale/code-page handling and later-dialect
+  `==` differences require separate compatibility work.
 - The DBF writer is single-writer only. There is no cross-process locking,
   transaction rollback, crash-consistency guarantee, or automatic refresh
   of tables already open elsewhere. Do not use it concurrently on live data.
@@ -46,4 +52,7 @@ reference files are still outstanding.
 - Later USE close semantics:
   https://www.dbase.com/help/2019_0/Xbase/IDH_XBASE_USE.htm
 - Language Handbook (dialect-labelled SCAN / APPEND / GO):
+  https://www.terrellamedia.com/wp-content/uploads/2022/01/dBASE-Language-Handbook-by-David-M-Kalman-Final.pdf
+
+- Historical SET EXACT reference:
   https://www.terrellamedia.com/wp-content/uploads/2022/01/dBASE-Language-Handbook-by-David-M-Kalman-Final.pdf

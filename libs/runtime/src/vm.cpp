@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Brierfield Labs
 #include <xabl/runtime/xabl.hpp>
 #include "internal.hpp"
+#include "comparison.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -158,6 +159,11 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
 
         case OpCode::SetDeletedVisibility:
             hide_deleted_ = instruction.operand.as_logical();
+            ++ip;
+            break;
+
+        case OpCode::SetExact:
+            exact_ = instruction.operand.as_logical();
             ++ip;
             break;
 
@@ -337,17 +343,12 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
-        case OpCode::Equal: {
+        case OpCode::Equal:
+        case OpCode::EqualExact: {
             const Value rhs = pop();
             const Value lhs = pop();
-
-            if (std::holds_alternative<std::string>(lhs.storage()) ||
-                std::holds_alternative<std::string>(rhs.storage())) {
-                stack_.push_back(Value(lhs.as_string() == rhs.as_string()));
-            } else {
-                stack_.push_back(Value(
-                    std::fabs(lhs.as_number() - rhs.as_number()) < 1e-12));
-            }
+            stack_.push_back(Value(equal_values(
+                lhs, rhs, exact_, instruction.opcode == OpCode::EqualExact)));
             ++ip;
             break;
         }
@@ -553,16 +554,12 @@ Value Vm::evaluate_expression(const Program& program) const {
             break;
         }
 
-        case OpCode::Equal: {
+        case OpCode::Equal:
+        case OpCode::EqualExact: {
             const Value rhs = pop_value();
             const Value lhs = pop_value();
-            if (std::holds_alternative<std::string>(lhs.storage()) ||
-                std::holds_alternative<std::string>(rhs.storage())) {
-                values.push_back(Value(lhs.as_string() == rhs.as_string()));
-            } else {
-                values.push_back(Value(
-                    std::fabs(lhs.as_number() - rhs.as_number()) < 1e-12));
-            }
+            values.push_back(Value(equal_values(
+                lhs, rhs, exact_, instruction.opcode == OpCode::EqualExact)));
             break;
         }
 

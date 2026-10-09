@@ -18,7 +18,8 @@ From weakest to strongest precedence:
 
 Unary `.NOT.` and `NOT` consume a comparison expression but bind more
 tightly than AND/OR, so `NOT balance < 100` means `NOT (balance < 100)`.
-Binary operators are left-associative. Parentheses explicitly override
+The `=` equality opcode respects the VM's SET EXACT state, while `==` emits
+a distinct strict-equality opcode. Binary operators are left-associative. Parentheses explicitly override
 precedence. Tokenisation respects quoted strings and the compact
 `alias->field` syntax.
 
@@ -36,7 +37,7 @@ unknown syntax as a variable name.
 ## Compatibility constraints and future work
 
 The above is an executable subset, not a full dBASE III PLUS parser.
-Operator precedence and case/comparison semantics must ultimately be
+Operator precedence and remaining case/comparison semantics must ultimately be
 validated against independently created historical reference cases in
 each explicit compatibility profile. Present VM evaluation is eager:
 logical short-circuit semantics, exact/substring comparison modes, date

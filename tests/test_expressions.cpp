@@ -35,7 +35,20 @@ int main() {
         {"? \"A+B\" = 'A+B'", ".T.\n"},
         {"? 'A AND B'", "A AND B\n"},
         {"? 'DON''T PANIC'", "DON'T PANIC\n"},
-        {"? \"OR .NOT. AND ->\"", "OR .NOT. AND ->\n"}
+        {"? \"OR .NOT. AND ->\"", "OR .NOT. AND ->\n"},
+        {"? 'JACOBSON' = 'JACOBS'", ".T.\n"},
+        {"? 'JACOBS' = 'JACOBSON'", ".F.\n"},
+        {"? 'JACOBSON' <> 'JACOBS'", ".F.\n"},
+        {"? 'JACOBSON' == 'JACOBS'", ".F.\n"},
+        {"? 'ABC' == 'ABC '", ".F.\n"},
+        {"? 'ABC' = ''", ".T.\n"},
+        {"? '' = 'ABC'", ".F.\n"},
+        {"SET EXACT ON\n? 'JACOBSON' = 'JACOBS'", ".F.\n"},
+        {"SET EXACT ON\n? 'ABC ' = 'ABC'", ".T.\n"},
+        {"SET EXACT ON\n? 'ABC' = 'ABC '", ".T.\n"},
+        {"SET EXACT ON\n? 'ABC' == 'ABC '", ".F.\n"},
+        {"SET EXACT ON\n? 'ABC' <> 'ABC '", ".F.\n"},
+        {"SET EXACT ON\nSET EXACT OFF\n? 'ABC' = 'AB'", ".T.\n"}
     };
     try {
         xabl::Compiler compiler;
