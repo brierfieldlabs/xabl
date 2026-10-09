@@ -20,6 +20,8 @@ struct Block {
     Kind kind;
     std::size_t jump_index;
     std::size_t loop_start;
+    bool has_else{false};
+    std::vector<std::size_t> exit_jumps{};
 };
 
 } // namespace
@@ -279,6 +281,19 @@ Program Compiler::compile(std::string_view source) const {
                 continue;
             }
 
+            if (equal_ci(line, "ELSE")) {
+                if (blocks.empty() || blocks.back().kind != Block::Kind::If ||
+                    blocks.back().has_else) {
+                    throw std::runtime_error("ELSE without unmatched IF");
+                }
+                const std::size_t end_jump = program.code.size();
+                program.code.push_back({OpCode::Jump});
+                program.code[blocks.back().jump_index].target = program.code.size();
+                blocks.back().jump_index = end_jump;
+                blocks.back().has_else = true;
+                continue;
+            }
+
             if (equal_ci(line, "ENDIF")) {
                 if (blocks.empty() || blocks.back().kind != Block::Kind::If) {
                     throw std::runtime_error("ENDIF without matching IF");
@@ -298,6 +313,25 @@ Program Compiler::compile(std::string_view source) const {
                 continue;
             }
 
+            if (equal_ci(line, "LOOP") || equal_ci(line, "EXIT")) {
+                const auto loop = std::find_if(
+                    blocks.rbegin(), blocks.rend(), [](const Block& block) {
+                        return block.kind == Block::Kind::DoWhile;
+                    });
+                if (loop == blocks.rend()) {
+                    throw std::runtime_error(line + " outside DO WHILE block");
+                }
+                if (equal_ci(line, "LOOP")) {
+                    // Re-evaluate the loop condition on each continue.
+                    program.code.push_back(
+                        {OpCode::Jump, {}, {}, loop->loop_start});
+                } else {
+                    loop->exit_jumps.push_back(program.code.size());
+                    program.code.push_back({OpCode::Jump});
+                }
+                continue;
+            }
+
             if (equal_ci(line, "ENDDO")) {
                 if (blocks.empty() || blocks.back().kind != Block::Kind::DoWhile) {
                     throw std::runtime_error("ENDDO without matching DO WHILE");
@@ -305,7 +339,11 @@ Program Compiler::compile(std::string_view source) const {
                 const Block block = blocks.back();
                 blocks.pop_back();
                 program.code.push_back({OpCode::Jump, {}, {}, block.loop_start});
-                program.code[block.jump_index].target = program.code.size();
+                const std::size_t end = program.code.size();
+                program.code[block.jump_index].target = end;
+                for (const std::size_t exit_jump : block.exit_jumps) {
+                    program.code[exit_jump].target = end;
+                }
                 continue;
             }
 
