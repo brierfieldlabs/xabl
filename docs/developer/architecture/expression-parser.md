@@ -67,3 +67,7 @@ logic in numeric_functions.hpp.
 ABS and INT emit one-argument numeric bytecodes; MIN and MAX emit
 two-argument numeric bytecodes. Main VM execution and SET FILTER use the
 same numeric_functions.hpp helpers with explicit argument type checks.
+
+ASC and CHR are one-argument functions with distinct bytecode operations.
+The ordinary VM and embedded DBF filter evaluator use the same
+byte-oriented character code helper in text_functions.hpp.

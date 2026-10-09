@@ -327,6 +327,13 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::CallAsc:
+        case OpCode::CallChr:
+            stack_.push_back(apply_character_code_function(
+                instruction.opcode, pop()));
+            ++ip;
+            break;
+
         case OpCode::CallSpace:
             stack_.push_back(apply_space_function(pop()));
             ++ip;
@@ -613,6 +620,12 @@ Value Vm::evaluate_expression(const Program& program) const {
             values.push_back(apply_at_function(needle, haystack));
             break;
         }
+
+        case OpCode::CallAsc:
+        case OpCode::CallChr:
+            values.push_back(apply_character_code_function(
+                instruction.opcode, pop_value()));
+            break;
 
         case OpCode::CallSpace:
             values.push_back(apply_space_function(pop_value()));

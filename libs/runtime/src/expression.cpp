@@ -260,6 +260,8 @@ private:
                 if (current.text == "VAL") return OpCode::CallVal;
                 if (current.text == "ABS") return OpCode::CallAbs;
                 if (current.text == "INT") return OpCode::CallInt;
+                if (current.text == "ASC") return OpCode::CallAsc;
+                if (current.text == "CHR") return OpCode::CallChr;
                 return OpCode::Halt;
             };
             if (const auto opcode = one_arg(); opcode != OpCode::Halt) {
