@@ -75,6 +75,32 @@ struct ExpressionCompiler {
             return;
         }
 
+        if (folded.starts_with("NOT ")) {
+            emit(expression.substr(4));
+            program.code.push_back({OpCode::UnaryNot});
+            return;
+        }
+
+        for (const std::string op : {".OR.", " OR "}) {
+            const auto pos = find_operator(folded, op);
+            if (pos != std::string::npos) {
+                emit(expression.substr(0, pos));
+                emit(expression.substr(pos + op.size()));
+                program.code.push_back({OpCode::LogicalOr});
+                return;
+            }
+        }
+
+        for (const std::string op : {".AND.", " AND "}) {
+            const auto pos = find_operator(folded, op);
+            if (pos != std::string::npos) {
+                emit(expression.substr(0, pos));
+                emit(expression.substr(pos + op.size()));
+                program.code.push_back({OpCode::LogicalAnd});
+                return;
+            }
+        }
+
         for (const std::string op : {">=", "<=", "<>", "!=", "==", ">", "<", "="}) {
             const auto pos = find_operator(expression, op);
             if (pos != std::string::npos) {
@@ -772,7 +798,6 @@ void DbfTable::load() {
     const std::uint16_t header_length =
         static_cast<std::uint16_t>(header[8]) |
         (static_cast<std::uint16_t>(header[9]) << 8);
-
     record_length_ =
         static_cast<std::uint16_t>(header[10]) |
         (static_cast<std::uint16_t>(header[11]) << 8);
@@ -1197,6 +1222,22 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             ++ip;
             break;
 
+        case OpCode::LogicalAnd: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_logical() && rhs.as_logical()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::LogicalOr: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_logical() || rhs.as_logical()));
+            ++ip;
+            break;
+        }
+
         case OpCode::Add: {
             const Value rhs = pop();
             const Value lhs = pop();
@@ -1404,6 +1445,20 @@ Value Vm::evaluate_expression(const Program& program) const {
         case OpCode::UnaryNot:
             values.push_back(Value(!pop_value().as_logical()));
             break;
+
+        case OpCode::LogicalAnd: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_logical() && rhs.as_logical()));
+            break;
+        }
+
+        case OpCode::LogicalOr: {
+            const Value rhs = pop_value();
+            const Value lhs = pop_value();
+            values.push_back(Value(lhs.as_logical() || rhs.as_logical()));
+            break;
+        }
 
         case OpCode::Add: {
             const Value rhs = pop_value();

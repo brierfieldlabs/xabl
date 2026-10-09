@@ -57,6 +57,8 @@ enum class OpCode {
     ReplaceField,
     Print,
     UnaryNot,
+    LogicalAnd,
+    LogicalOr,
     Add,
     Subtract,
     Multiply,

@@ -182,6 +182,25 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        const xabl::Program logical_program =
+            compiler.compile(read_text(fixtures / "legacy-logical.prg"));
+
+        std::ostringstream logical_output;
+        xabl::Vm logical_vm(logical_output);
+        logical_vm.run(logical_program, fixtures);
+
+        const std::string expected_logical =
+            "word-and\n"
+            "dot-or\n"
+            "word-not\n"
+            "Charlie\n";
+
+        if (logical_output.str() != expected_logical) {
+            std::cerr << "unexpected logical-operator output\nExpected:\n"
+                      << expected_logical << "Actual:\n" << logical_output.str();
+            return 1;
+        }
+
         std::cout << "XABL smoke test passed\n";
         return 0;
     } catch (const std::exception& ex) {
