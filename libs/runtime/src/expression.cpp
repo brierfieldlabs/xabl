@@ -265,6 +265,12 @@ private:
                 if (current.text == "INT") return OpCode::CallInt;
                 if (current.text == "ASC") return OpCode::CallAsc;
                 if (current.text == "CHR") return OpCode::CallChr;
+                if (current.text == "CTOD") return OpCode::CallCtod;
+                if (current.text == "DTOC") return OpCode::CallDtoc;
+                if (current.text == "DTOS") return OpCode::CallDtos;
+                if (current.text == "YEAR") return OpCode::CallYear;
+                if (current.text == "MONTH") return OpCode::CallMonth;
+                if (current.text == "DAY") return OpCode::CallDay;
                 return OpCode::Halt;
             };
             if (const auto opcode = one_arg(); opcode != OpCode::Halt) {

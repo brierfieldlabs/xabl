@@ -24,14 +24,24 @@ namespace xabl {
 
 class Program;
 
+/// A legacy date value. All-zero components mean the historical blank date.
+/// Date values are distinct from character fields and numeric operands.
+struct DateValue {
+    int year{};
+    unsigned month{};
+    unsigned day{};
+    bool operator==(const DateValue&) const = default;
+};
+
 class Value {
 public:
-    using Storage = std::variant<std::monostate, bool, double, std::string>;
+    using Storage = std::variant<std::monostate, bool, double, std::string, DateValue>;
 
     Value() = default;
     Value(bool value);
     Value(double value);
     Value(std::string value);
+    Value(DateValue value);
 
     [[nodiscard]] bool is_empty() const;
     [[nodiscard]] bool as_logical() const;
@@ -106,6 +116,12 @@ enum class OpCode {
     CallAsc,
     CallChr,
     CallStuff,
+    CallCtod,
+    CallDtoc,
+    CallDtos,
+    CallYear,
+    CallMonth,
+    CallDay,
     Halt
 };
 

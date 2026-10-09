@@ -616,7 +616,8 @@ int main(int argc, char** argv) {
         constexpr std::size_t header_bytes = 32;
         constexpr std::size_t descriptor_bytes = 32;
         // Descriptor[11]: type, [16]: width, [17]: decimals.
-        validate_bad_descriptor("date", header_bytes + 11, "D");
+        // D is now admitted only for genuine eight-byte date descriptors.
+        validate_bad_descriptor("date-wrong-width", header_bytes + 11, "D");
         validate_bad_descriptor("memo", header_bytes + 11, "M");
         validate_bad_descriptor("unknown", header_bytes + 11, "Z");
         validate_bad_descriptor("character-decimals", header_bytes + 17,

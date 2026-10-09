@@ -162,12 +162,13 @@ rejected without moving the record pointer. This is a host safety rule.
 
 ## DBF field type admission
 
-Only C, N, F and L descriptors are executable in the current DBF
-reader/writer subset. D (date), M (memo) and unknown later-dialect
-descriptors now fail explicitly, rather than being silently treated as
-strings. This is a deliberate compatibility limitation pending proper
-typed date storage and DBT support, NOT historical dBASE behaviour.
-Duplicate field names and invalid width/decimal descriptors are refused.
+The executable subset supports C, N, F, L and now typed D (date)
+descriptors. The eight-byte YYYYMMDD field is checked for a genuine
+calendar date, with eight spaces representing a blank date. M (memo)
+and unknown later-dialect descriptors still fail explicitly rather than
+silently becoming strings. DBT support is pending, NOT absent in
+historical dBASE. Duplicate field names and invalid widths/decimals
+are refused.
 
 ## Work-area selection
 
@@ -176,3 +177,19 @@ of the ten dBASE III PLUS work areas. File aliases remain usable as
 selectors. Numbers outside this range and unknown aliases are rejected
 without changing the active work area. Other historical dialects may
 support different work-area limits.
+
+## Typed date subset
+
+DBF D fields now decode and persist a DateValue as eight YYYYMMDD
+bytes (or eight spaces for a blank), checked for calendar correctness.
+CTOD(), DTOC(), DTOS(), YEAR(), MONTH(), DAY() operate on typed dates in
+normal and filter expressions. The default CTOD spelling is MM/DD/YY,
+mapping two digits to 1900+year until SET EPOCH is implemented; explicit
+MM/DD/YYYY is also accepted. Excess calendar days within a valid month
+normalise forward. Invalid text yields blank dates.
+
+Date comparisons between two populated dates are chronological.
+Blank-date comparisons are still explicitly unsupported until dialect
+reference behaviour is tested. SET DATE, SET CENTURY/EPOCH, DATE(),
+date arithmetic and memo DBT are separate work. Do not infer that
+these modern restrictions existed in the original interpreter.

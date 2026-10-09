@@ -6,6 +6,7 @@
 #include "text_functions.hpp"
 #include "operators.hpp"
 #include "numeric_functions.hpp"
+#include "date_functions.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -407,6 +408,16 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::CallCtod:
+        case OpCode::CallDtoc:
+        case OpCode::CallDtos:
+        case OpCode::CallYear:
+        case OpCode::CallMonth:
+        case OpCode::CallDay:
+            stack_.push_back(apply_date_function(instruction.opcode, pop()));
+            ++ip;
+            break;
+
         case OpCode::Print:
             output_ << pop().as_string() << '\n';
             ++ip;
@@ -711,6 +722,15 @@ Value Vm::evaluate_expression(const Program& program) const {
                 target, start, quantity, replacement));
             break;
         }
+
+        case OpCode::CallCtod:
+        case OpCode::CallDtoc:
+        case OpCode::CallDtos:
+        case OpCode::CallYear:
+        case OpCode::CallMonth:
+        case OpCode::CallDay:
+            values.push_back(apply_date_function(instruction.opcode, pop_value()));
+            break;
 
         case OpCode::UnaryNot:
             values.push_back(Value(!pop_value().as_logical()));

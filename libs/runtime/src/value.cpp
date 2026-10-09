@@ -16,6 +16,7 @@ namespace xabl {
 Value::Value(bool value) : storage_(value) {}
 Value::Value(double value) : storage_(value) {}
 Value::Value(std::string value) : storage_(std::move(value)) {}
+Value::Value(DateValue value) : storage_(value) {}
 
 bool Value::is_empty() const {
     if (std::holds_alternative<std::monostate>(storage_)) {
@@ -23,6 +24,9 @@ bool Value::is_empty() const {
     }
     if (const auto* text = std::get_if<std::string>(&storage_)) {
         return text->empty();
+    }
+    if (const auto* date = std::get_if<DateValue>(&storage_)) {
+        return date->year == 0;
     }
     return false;
 }
@@ -36,6 +40,9 @@ bool Value::as_logical() const {
     }
     if (const auto* value = std::get_if<std::string>(&storage_)) {
         return !value->empty();
+    }
+    if (std::holds_alternative<DateValue>(storage_)) {
+        throw std::runtime_error("date cannot be converted to logical implicitly");
     }
     return false;
 }
@@ -59,6 +66,9 @@ double Value::as_number() const {
         }
         return converted;
     }
+    if (std::holds_alternative<DateValue>(storage_)) {
+        throw std::runtime_error("date cannot be converted to numeric implicitly");
+    }
     return 0.0;
 }
 
@@ -72,6 +82,14 @@ std::string Value::as_string() const {
     if (const auto* value = std::get_if<double>(&storage_)) {
         std::ostringstream out;
         out << std::setprecision(15) << *value;
+        return out.str();
+    }
+    if (const auto* date = std::get_if<DateValue>(&storage_)) {
+        if (date->year == 0) return "  /  /  ";
+        std::ostringstream out;
+        out << std::setfill('0') << std::setw(2) << date->month
+            << '/' << std::setw(2) << date->day
+            << '/' << std::setw(2) << (date->year % 100);
         return out.str();
     }
     return "";

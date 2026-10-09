@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Brierfield Labs
 #include <xabl/runtime/xabl.hpp>
 #include "internal.hpp"
+#include "date_functions.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -113,6 +114,7 @@ void DbfTable::append_blank() {
         if (field_info.type == 'L') {
             record[field_info.offset] = '?'; // uninitialised logical value
         }
+        // A blank date is eight spaces, not zero bytes or a fake string.
     }
 
     file.clear();
@@ -198,6 +200,9 @@ Value DbfTable::field(const std::string& name) const {
     if (field_info.type == 'C') {
         return Value(raw);
     }
+    if (field_info.type == 'D') {
+        return Value(parse_dbf_date(raw));
+    }
     throw std::runtime_error("unsupported DBF field type in reader");
 }
 
@@ -252,6 +257,10 @@ void DbfTable::replace(const std::string& name, const Value& value) {
     } else if (field_info.type == 'L') {
         encoded = value.as_logical() ? "T" : "F";
         encoded.resize(field_info.length, ' ');
+    } else if (field_info.type == 'D') {
+        const auto* date = std::get_if<DateValue>(&value.storage());
+        if (!date) throw std::runtime_error("date DBF field requires a date value");
+        encoded = encode_dbf_date(*date);
     } else if (field_info.type == 'C') {
         encoded = value.as_string();
         if (encoded.size() > field_info.length) {
@@ -353,17 +362,19 @@ void DbfTable::load() {
         const std::size_t length = descriptor[16];
         const char type = static_cast<char>(descriptor[11]);
         const std::size_t decimals = descriptor[17];
-        // Unknown types must not be treated as character data. In
-        // particular, D is a typed date and M is a DBT memo pointer;
-        // interpreting either as a string would silently corrupt data.
-        if (type != 'C' && type != 'N' && type != 'F' && type != 'L') {
+        // Unknown types must not be treated as character data. D is a
+        // typed date and M is a DBT memo pointer; only D is implemented,
+        // and only with its authentic eight-byte YYYYMMDD descriptor.
+        if (type != 'C' && type != 'N' && type != 'F' &&
+            type != 'L' && type != 'D') {
             throw std::runtime_error("unsupported DBF field type: " +
                                      std::string(1, type));
         }
         if (field_name.empty() || length == 0 ||
             offset > record_length_ || length > record_length_ - offset ||
             (type == 'L' && length != 1) ||
-            ((type == 'C' || type == 'L') && decimals != 0) ||
+            ((type == 'C' || type == 'L' || type == 'D') && decimals != 0) ||
+            (type == 'D' && length != 8) ||
             ((type == 'N' || type == 'F') && decimals >= length)) {
             throw std::runtime_error("invalid DBF field descriptor layout");
         }
