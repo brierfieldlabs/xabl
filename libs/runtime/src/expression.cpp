@@ -270,12 +270,13 @@ private:
                 emit(opcode);
                 return;
             }
-            // The second expression can be an arbitrary nested call or
-            // arithmetic expression; only SUBSTR accepts a third argument.
+            // Search and substring functions each accept two full
+            // expressions; only SUBSTR accepts a third argument.
             OpCode slice_op = OpCode::Halt;
             if (current.text == "LEFT") slice_op = OpCode::CallLeft;
             if (current.text == "RIGHT") slice_op = OpCode::CallRight;
             if (current.text == "SUBSTR") slice_op = OpCode::CallSubstr;
+            if (current.text == "AT") slice_op = OpCode::CallAt;
             if (slice_op != OpCode::Halt) {
                 if (token_.kind == Kind::RParen) fail("missing string argument");
                 expression(1);

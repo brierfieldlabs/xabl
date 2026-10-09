@@ -322,6 +322,20 @@ int main(int argc, char** argv) {
                 "character ordering in filters failed: " +
                     ordering_output.str());
 
+        std::ostringstream search_output;
+        xabl::Vm search_vm(search_output);
+        search_vm.run(compiler.compile(
+            "USE branch\n"
+            "SET FILTER TO AT('ob', NAME) > 0\n"
+            "GO TOP\n? NAME\n"
+            "SET FILTER TO AT('ar', NAME) > 0\n"
+            "GO TOP\n? NAME\n"
+            "SET FILTER TO AT('not-here', NAME) > 0\n"
+            "GO TOP\n? EOF()\n"), temp.path);
+        require(search_output.str() == "Bob\nCharlie\n.T.\n",
+                "AT substring search in filters failed: " +
+                    search_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

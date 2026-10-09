@@ -97,4 +97,19 @@ inline Value apply_slice_function(OpCode opcode, const Value& string_arg,
     throw std::runtime_error("unsupported string slice opcode");
 }
 
+// AT(needle, haystack) returns the one-based position of the first
+// case-sensitive byte sequence, or zero when no occurrence exists.
+inline Value apply_at_function(const Value& needle, const Value& haystack) {
+    const auto* wanted = std::get_if<std::string>(&needle.storage());
+    const auto* target = std::get_if<std::string>(&haystack.storage());
+    if (!wanted || !target) {
+        throw std::runtime_error("AT requires two character arguments");
+    }
+    if (wanted->empty() || target->empty()) return Value(0.0);
+    const auto offset = target->find(*wanted);
+    return Value(offset == std::string::npos
+                     ? 0.0
+                     : static_cast<double>(offset + 1));
+}
+
 } // namespace xabl
