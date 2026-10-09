@@ -152,3 +152,10 @@ anywhere within its right character expression. It is case-sensitive,
 byte-oriented, false for an empty substring, and independent of
 SET EXACT. Its boolean result differs from AT()'s numeric position.
 DBF filters use the same bytecode operation as normal expressions.
+
+## Safe numeric GO record addressing
+
+GO with a numeric physical record target validates that the value is
+finite, nonnegative and representable as the host record index before
+conversion. Values beyond RECCOUNT reach EOF; invalid targets are
+rejected without moving the record pointer. This is a host safety rule.

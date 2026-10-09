@@ -209,6 +209,14 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             if (requested < 0.0) {
                 throw std::runtime_error("GO requires a non-negative record number");
             }
+            // Avoid undefined floating-point to size_t conversion. A double
+            // can represent 2^N exactly but not the greatest N-bit integer,
+            // so 2^N is the exclusive upper bound on every target.
+            const double exclusive_upper = std::ldexp(
+                1.0, std::numeric_limits<std::size_t>::digits);
+            if (!std::isfinite(requested) || requested >= exclusive_upper) {
+                throw std::runtime_error("GO record number outside supported range");
+            }
 
             area.table->go_record(static_cast<std::size_t>(requested));
             area.found = false;
