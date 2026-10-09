@@ -8,7 +8,8 @@ following source files implement it, without changing existing semantics:
 
 | Source | Responsibility |
 | --- | --- |
-| `compiler.cpp` | Line-oriented command compilation and expression instruction emission |
+| `compiler.cpp` | Line-oriented command compilation |
+| `expression.cpp` | Expression lexer, precedence parser and VM instruction emission |
 | `value.cpp` | Tagged language values and legacy conversions |
 | `vm.cpp` | Stack execution, work areas, navigation, visibility and state |
 | `dbf.cpp` | dBASE III-compatible physical DBF records and record persistence |
@@ -20,8 +21,8 @@ contains only internal inline helpers; exported interface changes belong in the
 public header with compatibility tests. Do not introduce dependencies from DBF
 or NDX storage back to the compiler/VM.
 
-This split is deliberately mechanical. It does **not** establish a complete
-lexer/parser, dBASE compatibility-profile framework, production-grade write
+The original split was deliberately mechanical. The subsequent expression
+lexer/parser is documented separately; it does **not** establish a complete command parser, dBASE compatibility-profile framework, production-grade write
 transactions or NDX write support. Those remain separate tracked work.
 
 Build via CMake and execute CTest. The fixture generator creates customer DBF
