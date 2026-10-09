@@ -274,17 +274,42 @@ void DbfTable::load() {
         static_cast<std::uint16_t>(header[10]) |
         (static_cast<std::uint16_t>(header[11]) << 8);
 
+    // Check physical size before reserving record_count: a corrupt 32-bit
+    // count must not cause massive allocations or out-of-bounds reads.
+    if (header_length < 33 || record_length_ == 0) {
+        throw std::runtime_error("invalid DBF header or record length");
+    }
+    const auto physical_size = std::filesystem::file_size(path_);
+    if (physical_size < header_length ||
+        static_cast<std::uintmax_t>(record_count) >
+            (physical_size - header_length) / record_length_) {
+        throw std::runtime_error("DBF record count exceeds physical file size");
+    }
+
     std::size_t offset = 1;
     while (true) {
+        const auto position = input.tellg();
+        if (position < 0 || static_cast<std::uintmax_t>(position) >= header_length) {
+            throw std::runtime_error("missing DBF field descriptor terminator");
+        }
         unsigned char descriptor[32]{};
-        input.read(reinterpret_cast<char*>(descriptor), sizeof(descriptor));
+        // A valid zero-record DBF may have only the 0x0D descriptor
+        // terminator plus an optional 0x1A at this point. Read one byte
+        // before deciding whether the remaining 31 bytes exist.
+        input.read(reinterpret_cast<char*>(descriptor), 1);
         if (!input) {
             throw std::runtime_error("truncated DBF field descriptors");
         }
-
         if (descriptor[0] == 0x0D) {
-            input.seekg(-31, std::ios::cur);
             break;
+        }
+        if (static_cast<std::uintmax_t>(position) + sizeof(descriptor) >
+            header_length) {
+            throw std::runtime_error("truncated DBF field descriptor");
+        }
+        input.read(reinterpret_cast<char*>(descriptor + 1), 31);
+        if (!input) {
+            throw std::runtime_error("truncated DBF field descriptors");
         }
 
         std::string field_name(reinterpret_cast<char*>(descriptor), 11);
@@ -294,8 +319,13 @@ void DbfTable::load() {
         }
         field_name = upper(trim(field_name));
 
-        const std::size_t length = descriptor[16];        fields_.push_back(
-            {field_name, static_cast<char>(descriptor[11]), offset, length, descriptor[17]});
+        const std::size_t length = descriptor[16];
+        if (field_name.empty() || length == 0 ||
+            offset > record_length_ || length > record_length_ - offset) {
+            throw std::runtime_error("invalid DBF field descriptor layout");
+        }
+        fields_.push_back({field_name, static_cast<char>(descriptor[11]),
+                           offset, length, descriptor[17]});
         offset += length;
     }
 

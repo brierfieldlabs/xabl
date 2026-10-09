@@ -30,14 +30,18 @@ independent original-product reference files are still outstanding.
 - `APPEND` without BLANK invokes dBASE's interactive data editor and is not
   yet implemented. Unsupported commands must fail, not silently alias to
   non-interactive `APPEND BLANK`.
-- The current NDX implementation is read-only. `APPEND BLANK` refuses a
-  work area with an active NDX index to avoid silently stale index records.
+- The current NDX implementation is read-only. `APPEND BLANK` and
+  `REPLACE` refuse a work area with an active NDX index to avoid silently
+  stale key expressions and index records.
   `GO BOTTOM` also refuses active NDX until indexed-order navigation exists.
 - String ordering, collations, locale/code-page handling and later-dialect
   `==` differences require separate compatibility work.
 - The DBF writer is single-writer only. There is no cross-process locking,
   transaction rollback, crash-consistency guarantee, or automatic refresh
   of tables already open elsewhere. Do not use it concurrently on live data.
+- DBF header validation now rejects impossible physical record counts and
+  malformed field terminators before allocating. The reader supports empty
+  DBFs with a one-byte field-descriptor terminator.
 - Unknown trailing DBF content is refused, not truncated. Only an optional
   standard 0x1A terminator is recognised. Real-world legacy DBF/NDX samples
   remain essential before claiming broad file-format compatibility.
