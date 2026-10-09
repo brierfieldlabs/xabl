@@ -47,3 +47,7 @@ statement dispatch (see `docs/decisions/2026-10-09-prg-comments.md`).
 The command compiler uses quote-aware top-level keyword searches for
 STORE/REPLACE/USE clauses, documented in
 `docs/decisions/2026-10-09-command-delimiters.md`.
+
+Physical DBF record updates verify their on-disk preimage before writing.
+The mechanism is optimistic, not a substitute for DBF file/record locking;
+see `docs/decisions/2026-10-09-dbf-stale-write-protection.md`.
