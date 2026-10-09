@@ -14,9 +14,15 @@
 #include <stdexcept>
 
 namespace xabl {
-Vm::Vm(std::ostream& output) : output_(output) {}
+Vm::Vm(std::ostream& output, CompatibilityProfile profile)
+    : output_(output), profile_(profile) {
+    profile_.require_implemented();
+}
 
 void Vm::run(const Program& program, const std::filesystem::path& working_directory) {
+    if (program.dialect != profile_.dialect) {
+        throw std::runtime_error("program/runtime compatibility profile mismatch");
+    }
     stack_.clear();
     std::size_t ip = 0;
 

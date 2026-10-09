@@ -2,8 +2,8 @@
 
 The first runtime target is dBASE III PLUS. Maximum practical compatibility is
 the project's governing direction, but **support remains incomplete**.
-A version-specific compatibility object and independent original-product
-reference files are still outstanding.
+An explicit version-specific compatibility object now exists, while
+independent original-product reference files are still outstanding.
 
 ## Supported in these slices
 
