@@ -277,6 +277,22 @@ int main(int argc, char** argv) {
                 "character functions in filters failed: " +
                     text_filter_output.str());
 
+        // Multiple arguments, nesting and one-based extraction must
+        // execute identically inside SET FILTER bytecode.
+        std::ostringstream slice_output;
+        xabl::Vm slice_vm(slice_output);
+        slice_vm.run(compiler.compile(
+            "USE branch\n"
+            "SET FILTER TO LEFT(NAME,3) == 'Cha'\n"
+            "GO TOP\n? NAME\n"
+            "SET FILTER TO SUBSTR(NAME,2,2) == 'ob'\n"
+            "GO TOP\n? NAME\n"
+            "SET FILTER TO RIGHT(NAME,1) == 'e'\n"
+            "GO TOP\n? NAME\n"
+            "SKIP\n? NAME\n"), temp.path);
+        require(slice_output.str() == "Charlie\nBob\nAlice\nCharlie\n",
+                "string slicing in filters failed: " + slice_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

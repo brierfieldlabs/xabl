@@ -28,6 +28,10 @@ with doubled-quote escaping, `.T.`/`.F.` and TRUE/FALSE.
 Built-ins with zero arguments: EOF(), BOF(), FOUND(), RECNO(), RECCOUNT(),
 DELETED(). Variable and field references become `LoadName` bytecode.
 
+The lexer now also recognises comma as a function-argument separator.
+LEFT/RIGHT take exactly two arguments; SUBSTR takes two or three.
+All arguments are full expressions, including nested calls.
+
 Invalid characters, unclosed quotes/parentheses, junk trailing tokens,
 incomplete expressions, and unsupported calls now fail at compile time.
 These errors are wrapped by the command compiler with line number; the

@@ -7,11 +7,11 @@ independent original-product reference files are still outstanding.
 
 ## Supported in these slices
 
-- Basic character functions `LEN()`, `UPPER()`, `LOWER()`,
-  `TRIM()`/`RTRIM()` and `LTRIM()`, including nesting and expression
-  evaluation inside active filters. This subset requires string operands
-  and operates on 8-bit bytes using ASCII case conversion. Codepage-aware
-  case mapping is not yet supported.
+- Character functions `LEN()`, `UPPER()`, `LOWER()`,
+  `TRIM()`/`RTRIM()`, `LTRIM()`, `LEFT()`, `RIGHT()`, and
+  `SUBSTR()` with an optional length argument. Nested expressions and
+  active filters share byte-oriented results. ASCII case mapping is
+  implemented; original DOS codepage mapping remains pending.
 
 - `SET EXACT ON/OFF`: global character equality mode; OFF (default)
   compares the left string against the right prefix, ON compares after

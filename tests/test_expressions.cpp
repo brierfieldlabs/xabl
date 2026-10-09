@@ -49,6 +49,22 @@ int main() {
         {"SET EXACT ON\n? 'ABC' == 'ABC '", ".F.\n"},
         {"SET EXACT ON\n? 'ABC' <> 'ABC '", ".F.\n"},
         {"SET EXACT ON\nSET EXACT OFF\n? 'ABC' = 'AB'", ".T.\n"},
+        {"? LEFT('ALICE', 3)", "ALI\n"},
+        {"? RIGHT('ALICE', 2)", "CE\n"},
+        {"? SUBSTR('ALICE', 2)", "LICE\n"},
+        {"? SUBSTR('ALICE', 2, 2)", "LI\n"},
+        {"? SUBSTR('ALICE', 2, 99)", "LICE\n"},
+        {"? SUBSTR('ABC', 4)", "\n"},
+        {"? SUBSTR('ABC', 1, 0)", "\n"},
+        {"? LEFT('ABC', -1)", "\n"},
+        {"? RIGHT('ABC', 0)", "\n"},
+        {"? LEFT('ABC', 99)", "ABC\n"},
+        {"? RIGHT('ABC', 99)", "ABC\n"},
+        {"? LEFT('', 3)", "\n"},
+        {"? LEFT('ABCDE', 1+2)", "ABC\n"},
+        {"? RIGHT('ABCDE', 2*2)", "BCDE\n"},
+        {"? SUBSTR(UPPER('alice'), 2, LEN('ab'))", "LI\n"},
+        {"? LEN(SUBSTR('Hello', 3))", "3\n"},
         {"? LEN('A B')", "3\n"},
         {"? LEN('A   ')", "4\n"},
         {"? UPPER('aBc')", "ABC\n"},
@@ -80,7 +96,11 @@ int main() {
                  "? (2 + 3", "? 2 +", "? \"unterminated",
                  "? 1 2", "? UNKNOWN(1)", "? 1 / / 2",
                  "? EOF(1)", "? .BAD.", "? 5 ==", "? ()",
-                 "? LEN()", "? UPPER('a', 'b')", "? TRIM('a', 'b')"}) {
+                 "? LEN()", "? UPPER('a', 'b')", "? TRIM('a', 'b')",
+                 "? LEFT('a')", "? LEFT('a',1,2)",
+                 "? RIGHT('a')", "? RIGHT('a',1,2)",
+                 "? SUBSTR('ab')", "? SUBSTR('a',2,1,3)",
+                 "? LEFT('abc',)", "? SUBSTR('a',,2)"}) {
             try {
                 (void)compiler.compile(invalid);
                 std::cerr << "Expression unexpectedly compiled: " << invalid << '\n';
@@ -90,7 +110,10 @@ int main() {
             }
         }
         for (const char* invalid_type : {
-                 "? LEN(123)", "? UPPER(.T.)", "? TRIM(4)"}) {
+                 "? LEN(123)", "? UPPER(.T.)", "? TRIM(4)",
+                 "? LEFT(7,2)", "? RIGHT('abcd','2')",
+                 "? SUBSTR('abcd',.T.)", "? SUBSTR('abcd',2,'2')",
+                 "? SUBSTR('abc',0)", "? SUBSTR('abc',-1)"}) {
             std::ostringstream output;
             xabl::Vm vm(output);
             try {
