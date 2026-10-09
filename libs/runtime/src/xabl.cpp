@@ -57,6 +57,18 @@ struct ExpressionCompiler {
 
         const std::string folded = upper(expression);
 
+        if (expression.size() > 1 && expression.front() == '-') {
+            program.code.push_back({OpCode::PushLiteral, Value(0.0)});
+            emit(expression.substr(1));
+            program.code.push_back({OpCode::Subtract});
+            return;
+        }
+
+        if (expression.size() > 1 && expression.front() == '+') {
+            emit(expression.substr(1));
+            return;
+        }
+
         if (folded.starts_with(".NOT.")) {
             emit(expression.substr(5));
             program.code.push_back({OpCode::UnaryNot});
@@ -116,8 +128,28 @@ struct ExpressionCompiler {
             return;
         }
 
+        if (folded == "BOF()" || folded == "BOF( )") {
+            program.code.push_back({OpCode::CallBof});
+            return;
+        }
+
         if (folded == "FOUND()" || folded == "FOUND( )") {
             program.code.push_back({OpCode::CallFound});
+            return;
+        }
+
+        if (folded == "RECNO()" || folded == "RECNO( )") {
+            program.code.push_back({OpCode::CallRecno});
+            return;
+        }
+
+        if (folded == "RECCOUNT()" || folded == "RECCOUNT( )") {
+            program.code.push_back({OpCode::CallReccount});
+            return;
+        }
+
+        if (folded == "DELETED()" || folded == "DELETED( )") {
+            program.code.push_back({OpCode::CallDeleted});
             return;
         }
 
@@ -362,8 +394,31 @@ Program Compiler::compile(std::string_view source) const {
                 continue;
             }
 
+            if (starts_with_ci(line, "GO ") && !equal_ci(line, "GO TOP")) {
+                expression_compiler.emit(line.substr(3));
+                program.code.push_back({OpCode::GoRecord});
+                continue;
+            }
+
             if (equal_ci(line, "SKIP")) {
+                program.code.push_back({OpCode::PushLiteral, Value(1.0)});
                 program.code.push_back({OpCode::Skip});
+                continue;
+            }
+
+            if (starts_with_ci(line, "SKIP ")) {
+                expression_compiler.emit(line.substr(5));
+                program.code.push_back({OpCode::Skip});
+                continue;
+            }
+
+            if (equal_ci(line, "DELETE")) {
+                program.code.push_back({OpCode::DeleteRecord});
+                continue;
+            }
+
+            if (equal_ci(line, "RECALL")) {
+                program.code.push_back({OpCode::RecallRecord});
                 continue;
             }
 
@@ -478,17 +533,58 @@ DbfTable::DbfTable(std::filesystem::path path) : path_(std::move(path)) {
 }
 
 bool DbfTable::eof() const noexcept {
-    return current_ >= records_.size();
+    return !before_first_ && current_ >= records_.size();
+}
+
+bool DbfTable::bof() const noexcept {
+    return before_first_;
+}
+
+bool DbfTable::deleted() const {
+    if (before_first_ || eof()) {
+        return false;
+    }
+    return !records_[current_].empty() && records_[current_][0] == '*';
+}
+
+std::size_t DbfTable::recno() const noexcept {
+    if (before_first_) {
+        return 0;
+    }
+    if (eof()) {
+        return records_.size() + 1;
+    }
+    return current_ + 1;
+}
+
+std::size_t DbfTable::reccount() const noexcept {
+    return records_.size();
 }
 
 void DbfTable::go_top() noexcept {
+    before_first_ = false;
     current_ = 0;
 }
 
-void DbfTable::skip() noexcept {
-    if (!eof()) {
-        ++current_;
+void DbfTable::skip(std::ptrdiff_t count) noexcept {
+    if (count == 0) {
+        return;
     }
+
+    const std::ptrdiff_t current_position = before_first_
+        ? -1
+        : static_cast<std::ptrdiff_t>(current_);
+    const std::ptrdiff_t target = current_position + count;
+
+    if (target < 0) {
+        before_first_ = true;
+        current_ = 0;
+        return;
+    }
+
+    before_first_ = false;
+    const auto unsigned_target = static_cast<std::size_t>(target);
+    current_ = std::min(unsigned_target, records_.size());
 }
 
 Value DbfTable::field(const std::string& name) const {
@@ -515,12 +611,28 @@ Value DbfTable::field(const std::string& name) const {
 }
 
 void DbfTable::go_record(std::size_t one_based_record_number) {
-    if (one_based_record_number == 0 || one_based_record_number > records_.size()) {
+    if (one_based_record_number == 0) {
+        before_first_ = true;
+        current_ = 0;
+        return;
+    }
+
+    before_first_ = false;
+    if (one_based_record_number > records_.size()) {
         current_ = records_.size();
         return;
     }
 
     current_ = one_based_record_number - 1;
+}
+
+void DbfTable::set_deleted(bool deleted_state) {
+    if (before_first_ || eof()) {
+        throw std::runtime_error("DELETE/RECALL attempted outside a record");
+    }
+
+    records_[current_][0] = deleted_state ? '*' : ' ';
+    flush_record(current_);
 }
 
 void DbfTable::replace(const std::string& name, const Value& value) {
@@ -624,18 +736,13 @@ void DbfTable::load() {
             throw std::runtime_error("truncated DBF record data");
         }
 
-        // Deleted records remain physically present in DBF files. This first
-        // vertical slice skips them rather than exposing SET DELETED semantics.
-        if (!record.empty() && record[0] != '*') {
-            records_.push_back(std::move(record));
-        }
+        // Preserve physical records exactly, including the deletion marker.
+        // dBASE record numbers and NDX record pointers refer to physical rows.
+        records_.push_back(std::move(record));
     }
 }
 
 void DbfTable::flush_record(std::size_t record_index) {
-    // The first slice operates on fixtures without deleted records, so logical
-    // and physical record numbers match. Full DBF deleted-record semantics are
-    // intentionally deferred to the compatibility layer.
     std::fstream file(path_, std::ios::in | std::ios::out | std::ios::binary);
     if (!file) {
         throw std::runtime_error("cannot update DBF table: " + path_.string());
@@ -690,8 +797,7 @@ void NdxIndex::load_header() {
     }
 
     const auto read_u16 = [&](std::size_t offset) {
-        return static_cast<std::uint16_t>(header[offset]) |
-               (static_cast<std::uint16_t>(header[offset + 1]) << 8);
+        return static_cast<std::uint16_t>(header[offset]) |               (static_cast<std::uint16_t>(header[offset + 1]) << 8);
     };
     const auto read_u32 = [&](std::size_t offset) {
         return static_cast<std::uint32_t>(header[offset]) |
@@ -921,12 +1027,31 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::GoRecord: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("GO with no table open");
+            }
+
+            const double requested = pop().as_number();
+            if (requested < 0.0) {
+                throw std::runtime_error("GO requires a non-negative record number");
+            }
+
+            area.table->go_record(static_cast<std::size_t>(requested));
+            area.found = false;
+            ++ip;
+            break;
+        }
+
         case OpCode::Skip: {
             WorkArea& area = active_work_area();
             if (!area.table) {
                 throw std::runtime_error("SKIP with no table open");
             }
-            area.table->skip();
+
+            const double requested = pop().as_number();
+            area.table->skip(static_cast<std::ptrdiff_t>(requested));
             area.found = false;
             ++ip;
             break;
@@ -941,6 +1066,26 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             const std::size_t record_number = area.index->seek(pop());
             area.found = record_number != 0;
             area.table->go_record(record_number);
+            ++ip;
+            break;
+        }
+
+        case OpCode::DeleteRecord: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("DELETE with no table open");
+            }
+            area.table->set_deleted(true);
+            ++ip;
+            break;
+        }
+
+        case OpCode::RecallRecord: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("RECALL with no table open");
+            }
+            area.table->set_deleted(false);
             ++ip;
             break;
         }
@@ -1049,10 +1194,50 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::CallBof: {
+            const WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("BOF() with no table open");
+            }
+            stack_.push_back(Value(area.table->bof()));
+            ++ip;
+            break;
+        }
+
         case OpCode::CallFound:
             stack_.push_back(Value(active_work_area().found));
             ++ip;
             break;
+
+        case OpCode::CallRecno: {
+            const WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("RECNO() with no table open");
+            }
+            stack_.push_back(Value(static_cast<double>(area.table->recno())));
+            ++ip;
+            break;
+        }
+
+        case OpCode::CallReccount: {
+            const WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("RECCOUNT() with no table open");
+            }
+            stack_.push_back(Value(static_cast<double>(area.table->reccount())));
+            ++ip;
+            break;
+        }
+
+        case OpCode::CallDeleted: {
+            const WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("DELETED() with no table open");
+            }
+            stack_.push_back(Value(area.table->deleted()));
+            ++ip;
+            break;
+        }
 
         case OpCode::Halt:
             return;

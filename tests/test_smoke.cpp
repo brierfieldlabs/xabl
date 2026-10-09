@@ -116,6 +116,31 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        const xabl::Program record_status_program =
+            compiler.compile(read_text(fixtures / "legacy-record-status.prg"));
+
+        std::ostringstream record_status_output;
+        xabl::Vm record_status_vm(record_status_output);
+        record_status_vm.run(record_status_program, fixtures);
+
+        const std::string expected_record_status =
+            "3\n"
+            "1\n"
+            "3\n"
+            ".T.\n"
+            "4\n"
+            ".T.\n"
+            "0\n"
+            ".T.\n"
+            ".F.\n";
+
+        if (record_status_output.str() != expected_record_status) {
+            std::cerr << "unexpected record-status output\nExpected:\n"
+                      << expected_record_status << "Actual:\n"
+                      << record_status_output.str();
+            return 1;
+        }
+
         std::cout << "XABL smoke test passed\n";
         return 0;
     } catch (const std::exception& ex) {

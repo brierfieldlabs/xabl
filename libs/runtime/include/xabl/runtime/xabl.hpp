@@ -46,8 +46,11 @@ enum class OpCode {
     OpenIndex,
     SelectArea,
     GoTop,
+    GoRecord,
     Skip,
     Seek,
+    DeleteRecord,
+    RecallRecord,
     ReplaceField,
     Print,
     UnaryNot,
@@ -61,7 +64,11 @@ enum class OpCode {
     Jump,
     JumpIfFalse,
     CallEof,
+    CallBof,
     CallFound,
+    CallRecno,
+    CallReccount,
+    CallDeleted,
     Halt
 };
 
@@ -87,12 +94,18 @@ public:
     explicit DbfTable(std::filesystem::path path);
 
     [[nodiscard]] bool eof() const noexcept;
+    [[nodiscard]] bool bof() const noexcept;
+    [[nodiscard]] bool deleted() const;
+    [[nodiscard]] std::size_t recno() const noexcept;
+    [[nodiscard]] std::size_t reccount() const noexcept;
+
     void go_top() noexcept;
-    void skip() noexcept;
+    void go_record(std::size_t one_based_record_number);
+    void skip(std::ptrdiff_t count = 1) noexcept;
+    void set_deleted(bool deleted);
 
     [[nodiscard]] Value field(const std::string& name) const;
     void replace(const std::string& name, const Value& value);
-    void go_record(std::size_t one_based_record_number);
 
 private:
     struct Field {
@@ -108,6 +121,7 @@ private:
     std::vector<std::vector<char>> records_;
     std::size_t record_length_{};
     std::size_t current_{};
+    bool before_first_{false};
 
     void load();
     void flush_record(std::size_t record_index);
