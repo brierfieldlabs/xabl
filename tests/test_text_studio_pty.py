@@ -54,6 +54,14 @@ def main() -> int:
             fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 25, 100, 0, 0))
             wait_for(b"XABL Text Studio")
             wait_for(b"F1 Help")
+            send(b"\x1bOQ")  # F2 in xterm-256color: file browser
+            wait_for(b"FILE BROWSER")
+            wait_for(b"program.prg")
+            send(b"\x1bOB")  # xterm application-cursor Down in curses mode
+            send(b"\r")      # open highlighted source file
+            wait_for(b"Opened ")
+            # The completed editor redraw (including EDITOR) may arrive
+            # in the same pty read as the 'Opened' status text.
             # F9: compile-only. Program output should say "Compilation"
             # without executing the program or showing its result.
             send(b"\x1b[20~")

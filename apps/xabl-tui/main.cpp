@@ -3,6 +3,8 @@
 // Keyboard-first terminal IDE. ncurses is an optional frontend only;
 // parsing, bytecode and execution remain in the shared xabl_core library.
 #include "editor_buffer.hpp"
+#include "file_browser.hpp"
+#include "syntax_highlight.hpp"
 
 #include <xabl/runtime/xabl.hpp>
 
@@ -12,6 +14,7 @@
 #include <clocale>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -50,6 +53,11 @@ public:
             init_pair(2, COLOR_BLACK, COLOR_CYAN);
             init_pair(3, COLOR_YELLOW, COLOR_BLUE);
             init_pair(4, COLOR_WHITE, COLOR_BLACK);
+            init_pair(5, COLOR_YELLOW, COLOR_BLUE);
+            init_pair(6, COLOR_GREEN, COLOR_BLUE);
+            init_pair(7, COLOR_CYAN, COLOR_BLUE);
+            init_pair(8, COLOR_MAGENTA, COLOR_BLUE);
+            init_pair(9, COLOR_WHITE, COLOR_BLUE);
         }
     }
     ~CursesSession() { endwin(); }
@@ -79,8 +87,10 @@ public:
     }
 
 private:
-    enum class Mode { Editor, Output, Help };
+    enum class Mode { Editor, Output, Help, Browser };
     xabl::tui::EditorBuffer document_;
+    std::unique_ptr<xabl::tui::FileBrowser> browser_;
+    std::size_t browser_scroll_{};
     Mode mode_{Mode::Editor};
     std::string message_;
     std::string output_;
@@ -94,6 +104,45 @@ private:
         if (y < 0 || x < 0 || width <= 0) return;
         const std::string clipped(text.substr(0, static_cast<std::size_t>(width)));
         mvaddnstr(y, x, clipped.c_str(), width);
+    }
+
+    static std::string safe_title(std::string title) {
+        for (char& character : title) {
+            const auto byte = static_cast<unsigned char>(character);
+            if (byte < 32 || byte == 127) character = '?';
+        }
+        return title;
+    }
+
+    void paint_source(int y, const std::string& source, int width) {
+        if (scroll_column_ >= source.size() || width <= 0) return;
+        const std::size_t visible = std::min(static_cast<std::size_t>(width),
+                                             source.size() - scroll_column_);
+        attrset(COLOR_PAIR(1));
+        paint(y, gutter_width,
+              std::string_view(source).substr(scroll_column_, visible), width);
+        for (const auto& span : xabl::tui::highlight_line(source)) {
+            const auto begin = std::max(span.start, scroll_column_);
+            const auto end = std::min(span.start + span.length,
+                                      scroll_column_ + visible);
+            if (end <= begin) continue;
+            int colour = 1;
+            switch (span.kind) {
+            case xabl::tui::SyntaxKind::Keyword: colour = 5; break;
+            case xabl::tui::SyntaxKind::Function:
+            case xabl::tui::SyntaxKind::Logical: colour = 9; break;
+            case xabl::tui::SyntaxKind::String: colour = 6; break;
+            case xabl::tui::SyntaxKind::Comment: colour = 7; break;
+            case xabl::tui::SyntaxKind::Number: colour = 8; break;
+            case xabl::tui::SyntaxKind::Plain: break;
+            }
+            attrset(COLOR_PAIR(colour) |
+                    (span.kind == xabl::tui::SyntaxKind::Keyword ? A_BOLD : 0));
+            paint(y, gutter_width + static_cast<int>(begin - scroll_column_),
+                  std::string_view(source).substr(begin, end - begin),
+                  static_cast<int>(end - begin));
+        }
+        attrset(COLOR_PAIR(1));
     }
 
     void bar(int y, std::string_view value, int pair) const {
@@ -132,12 +181,15 @@ private:
 
         std::string heading = " XABL Text Studio  |  ";
         heading += mode_ == Mode::Editor ? "EDITOR" :
-                   mode_ == Mode::Output ? "PROGRAM OUTPUT" : "HELP";
+                   mode_ == Mode::Output ? "PROGRAM OUTPUT" :
+                   mode_ == Mode::Browser ? "FILE BROWSER" : "HELP";
         bar(0, heading, 2);
 
         const std::string filename = document_.path().empty()
             ? "UNTITLED.PRG" : document_.path().string();
-        bar(1, " File: " + filename + (document_.dirty() ? "  [Modified]" : ""), 1);
+        bar(1, mode_ == Mode::Browser && browser_
+            ? " Directory: " + safe_title(browser_->directory().string())
+            : " File: " + safe_title(filename) + (document_.dirty() ? "  [Modified]" : ""), 1);
 
         const int viewport_rows = height - 5;
         const int viewport_width = width - gutter_width - 1;
@@ -155,11 +207,25 @@ private:
                 paint(editor_top + visible, 0, label.str(), gutter_width);
                 attroff(A_DIM);
                 const auto& source = document_.lines()[index];
-                if (scroll_column_ < source.size())
-                    paint(editor_top + visible, gutter_width,
-                          std::string_view(source).substr(scroll_column_),
-                          viewport_width);
+                paint_source(editor_top + visible, source, viewport_width);
             }
+        } else if (mode_ == Mode::Browser && browser_) {
+            const auto& entries = browser_->entries();
+            if (browser_->selected() < browser_scroll_)
+                browser_scroll_ = browser_->selected();
+            if (browser_->selected() >= browser_scroll_ +
+                    static_cast<std::size_t>(viewport_rows))
+                browser_scroll_ = browser_->selected() -
+                    static_cast<std::size_t>(viewport_rows) + 1;
+            for (int visible = 0; visible < viewport_rows; ++visible) {
+                const std::size_t selected = browser_scroll_ + static_cast<std::size_t>(visible);
+                if (selected >= entries.size()) break;
+                const bool active = selected == browser_->selected();
+                attrset(COLOR_PAIR(active ? 2 : 1) | (active ? A_BOLD : 0));
+                mvhline(editor_top + visible, 0, ' ', width);
+                paint(editor_top + visible, 2, entries[selected].display_name, width - 4);
+            }
+            attrset(COLOR_PAIR(1));
         } else {
             std::vector<std::string> rows;
             std::istringstream stream(mode_ == Mode::Output ? output_ : help_text());
@@ -175,7 +241,8 @@ private:
 
         std::ostringstream status;
         status << " " << (mode_ == Mode::Editor ? "Edit" :
-                           mode_ == Mode::Output ? "Output" : "Help")
+                           mode_ == Mode::Output ? "Output" :
+                           mode_ == Mode::Browser ? "Browse" : "Help")
                << "  Line " << document_.cursor().row + 1
                << "  Col " << document_.cursor().column + 1
                << "  " << document_.lines().size() << " lines"
@@ -183,7 +250,9 @@ private:
         bar(height - 3, status.str(), 2);
         bar(height - 2, " " + message_, 1);
         bar(height - 1,
-            " F1 Help  F2 Open  F3 New  F4 Save  F5 Run  F6 Output  F7 Find  F9 Check  F10 Exit",
+            mode_ == Mode::Browser
+                ? " Arrows Move  Enter Open  Backspace Parent  Ctrl+O Path  Esc Editor"
+                : " F1 Help  F2 Files  F3 New  F4 Save  F5 Run  F6 Output  F7 Find  F9 Check  F10 Exit",
             2);
         if (mode_ == Mode::Editor) {
             curs_set(1);
@@ -202,7 +271,8 @@ private:
             "XABL TEXT STUDIO   |   DOS-inspired keyboard IDE\n"
             "\n"
             " F1       Toggle this help screen\n"
-            " F2       Open an existing .prg / .xabl source file\n"
+            " F2       Browse source files and directories\n"
+            " Ctrl+O   Open source by typing a path\n"
             " F3       New source file (asks before discarding changes)\n"
             " F4       Save source file (Ctrl+S also works)\n"
             " F5       Compile and run the source in shared XABL VM\n"
@@ -213,7 +283,7 @@ private:
             " Ctrl+Z   Undo recent edit\n"
             " Arrows   Navigate; Home/End and PgUp/PgDn supported\n"
             " Enter    New line; Tab inserts four spaces\n"
-            " Esc      Return to the editor\n"
+            " Esc      Return to the editor (and close browser)\n"
             "\n"
             "WARNING: F5 runs your program. DBF commands may write data.\n"
             "F9 is compile-only, suitable for checking code safely.\n"
@@ -274,6 +344,63 @@ private:
         message_ = "Opened " + path;
     }
 
+    void browse() {
+        const auto start = document_.path().empty()
+            ? fs::current_path() : fs::absolute(document_.path()).parent_path();
+        browser_ = std::make_unique<xabl::tui::FileBrowser>(start);
+        browser_scroll_ = 0;
+        mode_ = Mode::Browser;
+        message_ = "Select .PRG or .XABL. Enter opens; Esc cancels.";
+    }
+
+    void browse_key(int key) {
+        if (!browser_) { mode_ = Mode::Editor; return; }
+        switch (key) {
+        case KEY_UP: browser_->move_up(); break;
+        case KEY_DOWN: browser_->move_down(); break;
+        case KEY_HOME: browser_->select(0); break;
+        case KEY_END:
+            if (!browser_->entries().empty())
+                browser_->select(browser_->entries().size() - 1);
+            break;
+        case KEY_PPAGE:
+            for (int i = 0; i < 12; ++i) browser_->move_up();
+            break;
+        case KEY_NPAGE:
+            for (int i = 0; i < 12; ++i) browser_->move_down();
+            break;
+        case KEY_BACKSPACE:
+        case 127:
+        case 8:
+            browser_->parent();
+            browser_scroll_ = 0;
+            break;
+        case KEY_ENTER:
+        case '\n':
+        case '\r': {
+            const auto selected = browser_->activate();
+            if (selected.empty()) { browser_scroll_ = 0; break; }
+            if (!discard_ok()) break;
+            document_.load(selected);
+            mode_ = Mode::Editor;
+            browser_.reset();
+            scroll_row_ = scroll_column_ = 0;
+            message_ = "Opened " + safe_title(selected.string());
+            break;
+        }
+        case 27:
+            mode_ = Mode::Editor;
+            browser_.reset();
+            break;
+        case ctrl('O'):
+            mode_ = Mode::Editor;
+            browser_.reset();
+            open();
+            break;
+        default: break;
+        }
+    }
+
     void new_document() {
         if (!discard_ok()) return;
         document_.clear();
@@ -323,12 +450,21 @@ private:
 
     void handle(int key) {
         if (key == ERR) return;
+        if (mode_ == Mode::Browser) {
+            if (key == KEY_F(10) || key == ctrl('Q')) {
+                if (discard_ok()) active_ = false;
+            } else {
+                browse_key(key);
+            }
+            return;
+        }
         switch (key) {
         case KEY_F(1):
             mode_ = mode_ == Mode::Help ? Mode::Editor : Mode::Help;
             output_scroll_ = 0;
             return;
-        case KEY_F(2): open(); return;
+        case KEY_F(2): browse(); return;
+        case ctrl('O'): open(); return;
         case KEY_F(3): new_document(); return;
         case KEY_F(4):
         case ctrl('S'): save(); return;

@@ -30,7 +30,7 @@ control while inside the editor, restored on normal exit by curses.
 | Key | Operation |
 | --- | --- |
 | F1 | Toggle keyboard help |
-| F2 | Open an existing source file |
+| F2 | Browse PRG and XABL source files |\n| Ctrl+O | Open by entering a source path |
 | F3 | New/empty file |
 | F4 or Ctrl+S | Save file; prompt for path if untitled |
 | F5 | Compile and **run** the open source |
@@ -44,7 +44,12 @@ control while inside the editor, restored on normal exit by curses.
 | Page Up / Page Down | Move by twelve lines |
 | Backspace / Delete | Remove character or join lines |
 | Enter / Tab | New line / insert four spaces |
-| Esc | Return from help or output to editor |
+| Esc | Return from help, output or browser to editor |\n| Browser arrows / Enter | Navigate directories and open a source file |\n| Browser Backspace | Go to parent directory |
+
+F2 browses the currently opened source's directory (or current working
+directory for an untitled file). It lists folders and PRG/XABL source
+files but skips symlinks. The browser does not change files; Ctrl+O
+opens a path by name when needed.
 
 The editor prompts before discarding unsaved text. Saves first write a
 sibling staging file, then replace the target on successful completion.
@@ -71,10 +76,10 @@ eventually share this execution model and locking policy.
 - Files containing binary NUL are rejected. CRLF is preserved for
   consistently CRLF-formatted sources; mixed EOL sequences normalise to
   the first detected line-ending style when saved after editing.
-- A simple line editor and undo are present. There is no syntax
-  highlighting, breakpoint debugging, mouse support, project browser,
-  autocomplete, multi-document tabs, clipboard integration or integrated
-  database-browser pane yet.
+- Basic syntax colouring and a read-only directory browser are present.
+  Neither is a project/workspace manager. Breakpoint debugging, mouse
+  support, autocomplete, multi-document tabs, clipboard integration and
+  an integrated database-browser pane remain future work.
 - ncurses is optional. On systems without a compatible curses library,
   `xabl` and its testable text-buffer core still build; terminal UI is
   omitted. A Windows console/PDCurses backend is future work.
@@ -88,3 +93,7 @@ undo, insert/delete and safe-save failure. `xabl_tui_pty` launches the
 actual curses program under a pseudo-terminal and verifies F9 compilation,
 F5 execution, F6 navigation, Ctrl+S saving and Ctrl+Q exit using only a
 throwaway arithmetic script. The test suite never opens user databases.
+
+Independent syntax-highlighting and file-browser suites validate the
+presentation lexer and read-only filesystem navigation model without
+requiring an interactive terminal.

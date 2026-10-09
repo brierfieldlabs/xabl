@@ -99,12 +99,21 @@ set_tests_properties(xabl_dates PROPERTIES DEPENDS xabl_fixture_generate)
 
 
 # The text-mode editor is independently testable, even if curses is absent.
-add_library(xabl_text_editor apps/xabl-tui/editor_buffer.cpp)
+add_library(xabl_text_editor
+    apps/xabl-tui/editor_buffer.cpp
+    apps/xabl-tui/syntax_highlight.cpp
+    apps/xabl-tui/file_browser.cpp)
 target_include_directories(xabl_text_editor PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/xabl-tui)
 add_executable(xabl_text_editor_tests tests/test_text_editor.cpp)
 target_link_libraries(xabl_text_editor_tests PRIVATE xabl_text_editor)
 add_test(NAME xabl_text_editor COMMAND xabl_text_editor_tests)
+add_executable(xabl_syntax_tests tests/test_syntax_highlight.cpp)
+target_link_libraries(xabl_syntax_tests PRIVATE xabl_text_editor)
+add_test(NAME xabl_syntax_highlighting COMMAND xabl_syntax_tests)
+add_executable(xabl_file_browser_tests tests/test_file_browser.cpp)
+target_link_libraries(xabl_file_browser_tests PRIVATE xabl_text_editor)
+add_test(NAME xabl_file_browser COMMAND xabl_file_browser_tests)
 
 # ncurses is optional: other binaries and the future Qt IDE do not depend
 # on a terminal frontend. Windows can add a PDCurses-backed frontend later.
