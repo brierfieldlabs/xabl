@@ -75,3 +75,7 @@ byte-oriented character code helper in text_functions.hpp.
 STUFF accepts four complete, comma-separated expressions, emitting a
 dedicated four-operand bytecode operation. Runtime and filter evaluation
 use the same bounded string-editing helper.
+
+The classic $ containment operator belongs to the comparison
+precedence tier, compiles to Contains bytecode, and is evaluated through
+the same byte-oriented predicate in normal VM and embedded filters.

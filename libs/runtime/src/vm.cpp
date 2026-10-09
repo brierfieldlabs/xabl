@@ -465,6 +465,14 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::Contains: {
+            const Value haystack = pop();
+            const Value needle = pop();
+            stack_.push_back(Value(contained_in(needle, haystack)));
+            ++ip;
+            break;
+        }
+
         case OpCode::Jump:
             ip = instruction.target;
             break;
@@ -746,6 +754,13 @@ Value Vm::evaluate_expression(const Program& program) const {
             const Value lhs = pop_value();
             values.push_back(Value(equal_values(
                 lhs, rhs, exact_, instruction.opcode == OpCode::EqualExact)));
+            break;
+        }
+
+        case OpCode::Contains: {
+            const Value haystack = pop_value();
+            const Value needle = pop_value();
+            values.push_back(Value(contained_in(needle, haystack)));
             break;
         }
 

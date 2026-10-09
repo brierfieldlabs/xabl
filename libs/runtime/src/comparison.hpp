@@ -65,4 +65,16 @@ inline bool ordered_values(OpCode opcode, const Value& lhs, const Value& rhs) {
     throw std::runtime_error("unsupported relational opcode");
 }
 
+// The classic $ operator asks whether the first character expression is
+// contained anywhere inside the second. An empty needle never matches.
+// It is bytewise and independent of SET EXACT.
+inline bool contained_in(const Value& needle, const Value& haystack) {
+    const auto* requested = std::get_if<std::string>(&needle.storage());
+    const auto* searched = std::get_if<std::string>(&haystack.storage());
+    if (!requested || !searched) {
+        throw std::runtime_error("$ substring operator requires character operands");
+    }
+    return !requested->empty() && searched->find(*requested) != std::string::npos;
+}
+
 } // namespace xabl
