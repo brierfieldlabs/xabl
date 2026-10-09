@@ -4,6 +4,7 @@
 #include <xabl/runtime/xabl.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstring>
@@ -88,8 +89,35 @@ struct ExpressionCompiler {
             }
         }
 
+        for (const std::string op : {"+", "-"}) {
+            const auto pos = find_last_operator(expression, op);
+            if (pos != std::string::npos) {
+                emit(expression.substr(0, pos));
+                emit(expression.substr(pos + op.size()));
+                program.code.push_back(
+                    {op == "+" ? OpCode::Add : OpCode::Subtract});
+                return;
+            }
+        }
+
+        for (const std::string op : {"*", "/"}) {
+            const auto pos = find_last_operator(expression, op);
+            if (pos != std::string::npos) {
+                emit(expression.substr(0, pos));
+                emit(expression.substr(pos + op.size()));
+                program.code.push_back(
+                    {op == "*" ? OpCode::Multiply : OpCode::Divide});
+                return;
+            }
+        }
+
         if (folded == "EOF()" || folded == "EOF( )") {
             program.code.push_back({OpCode::CallEof});
+            return;
+        }
+
+        if (folded == "FOUND()" || folded == "FOUND( )") {
+            program.code.push_back({OpCode::CallFound});
             return;
         }
 
@@ -142,6 +170,32 @@ private:
         }
 
         return std::string::npos;
+    }
+
+    static std::size_t find_last_operator(
+        const std::string& expression, const std::string& op) {
+        bool quoted = false;
+        char quote = 0;
+        std::size_t found = std::string::npos;
+
+        for (std::size_t i = 0; i + op.size() <= expression.size(); ++i) {
+            const char c = expression[i];
+            if ((c == '"' || c == '\'') && (i == 0 || expression[i - 1] != '\\')) {
+                if (!quoted) {
+                    quoted = true;
+                    quote = c;
+                } else if (quote == c) {
+                    quoted = false;
+                }
+                continue;
+            }
+
+            if (!quoted && expression.compare(i, op.size(), op) == 0) {
+                found = i;
+            }
+        }
+
+        return found;
     }
 };
 
@@ -261,6 +315,18 @@ Program Compiler::compile(std::string_view source) const {
                 continue;
             }
 
+            if (starts_with_ci(line, "SET INDEX TO ")) {
+                program.code.push_back(
+                    {OpCode::OpenIndex, {}, basename_without_extension(line.substr(13))});
+                continue;
+            }
+
+            if (starts_with_ci(line, "SEEK ")) {
+                expression_compiler.emit(line.substr(5));
+                program.code.push_back({OpCode::Seek});
+                continue;
+            }
+
             if (equal_ci(line, "GO TOP")) {
                 program.code.push_back({OpCode::GoTop});
                 continue;
@@ -274,6 +340,25 @@ Program Compiler::compile(std::string_view source) const {
             if (starts_with_ci(line, "? ")) {
                 expression_compiler.emit(line.substr(2));
                 program.code.push_back({OpCode::Print});
+                continue;
+            }
+
+            if (starts_with_ci(line, "STORE ")) {
+                const std::string remainder = line.substr(6);
+                const std::string marker = " TO ";
+                const std::string folded = upper(remainder);
+                const auto to_pos = folded.find(marker);
+                if (to_pos == std::string::npos) {
+                    throw std::runtime_error("STORE requires TO");
+                }
+
+                expression_compiler.emit(remainder.substr(0, to_pos));
+                const std::string variable =
+                    trim(remainder.substr(to_pos + marker.size()));
+                if (variable.empty()) {
+                    throw std::runtime_error("STORE requires a variable name");
+                }
+                program.code.push_back({OpCode::StoreName, {}, upper(variable)});
                 continue;
             }
 
@@ -331,6 +416,18 @@ Program Compiler::compile(std::string_view source) const {
                 continue;
             }
 
+            const auto assignment = line.find('=');
+            if (assignment != std::string::npos) {
+                const std::string variable = trim(line.substr(0, assignment));
+                const std::string expression = line.substr(assignment + 1);
+                if (variable.empty() || expression.empty()) {
+                    throw std::runtime_error("invalid assignment");
+                }
+                expression_compiler.emit(expression);
+                program.code.push_back({OpCode::StoreName, {}, upper(variable)});
+                continue;
+            }
+
             throw std::runtime_error("unsupported statement: " + line);
         } catch (const std::exception& ex) {
             throw std::runtime_error(
@@ -385,6 +482,15 @@ Value DbfTable::field(const std::string& name) const {
     }
 
     return Value(rtrim_spaces(raw));
+}
+
+void DbfTable::go_record(std::size_t one_based_record_number) {
+    if (one_based_record_number == 0 || one_based_record_number > records_.size()) {
+        current_ = records_.size();
+        return;
+    }
+
+    current_ = one_based_record_number - 1;
 }
 
 void DbfTable::replace(const std::string& name, const Value& value) {
@@ -536,6 +642,147 @@ const DbfTable::Field& DbfTable::find_field(const std::string& name) const {
     return *it;
 }
 
+NdxIndex::NdxIndex(std::filesystem::path path) : path_(std::move(path)) {
+    load_header();
+}
+
+void NdxIndex::load_header() {
+    std::ifstream input(path_, std::ios::binary);
+    if (!input) {
+        throw std::runtime_error("cannot open NDX index: " + path_.string());
+    }
+
+    std::array<unsigned char, 512> header{};
+    input.read(reinterpret_cast<char*>(header.data()),
+               static_cast<std::streamsize>(header.size()));
+    if (input.gcount() != static_cast<std::streamsize>(header.size())) {
+        throw std::runtime_error("invalid NDX header: " + path_.string());
+    }
+
+    const auto read_u16 = [&](std::size_t offset) {
+        return static_cast<std::uint16_t>(header[offset]) |
+               (static_cast<std::uint16_t>(header[offset + 1]) << 8);
+    };
+    const auto read_u32 = [&](std::size_t offset) {
+        return static_cast<std::uint32_t>(header[offset]) |
+               (static_cast<std::uint32_t>(header[offset + 1]) << 8) |
+               (static_cast<std::uint32_t>(header[offset + 2]) << 16) |
+               (static_cast<std::uint32_t>(header[offset + 3]) << 24);
+    };
+
+    root_page_ = read_u32(0);
+    key_length_ = read_u16(12);
+    key_type_ = read_u16(16);
+    key_record_length_ = read_u32(18);
+
+    if (root_page_ == 0 || key_length_ == 0 ||
+        key_record_length_ < static_cast<std::uint32_t>(8U + key_length_)) {
+        throw std::runtime_error("unsupported or corrupt NDX header");
+    }
+
+    const char* expression = reinterpret_cast<const char*>(header.data() + 24);
+    const std::size_t available = header.size() - 24;
+    const std::size_t length = strnlen(expression, available);
+    expression_ = upper(trim(std::string(expression, length)));
+}
+
+const std::string& NdxIndex::expression() const noexcept {
+    return expression_;
+}
+
+std::size_t NdxIndex::seek(const Value& key) const {
+    std::ifstream input(path_, std::ios::binary);
+    if (!input) {
+        throw std::runtime_error("cannot open NDX index: " + path_.string());
+    }
+
+    auto read_u32 = [](const unsigned char* bytes) {
+        return static_cast<std::uint32_t>(bytes[0]) |
+               (static_cast<std::uint32_t>(bytes[1]) << 8) |
+               (static_cast<std::uint32_t>(bytes[2]) << 16) |
+               (static_cast<std::uint32_t>(bytes[3]) << 24);
+    };
+
+    const auto compare_key = [&](const unsigned char* bytes) {
+        if (key_type_ == 1) {
+            double stored = 0.0;
+            std::memcpy(&stored, bytes, sizeof(double));
+            const double wanted = key.as_number();
+            return stored < wanted ? -1 : (stored > wanted ? 1 : 0);
+        }
+
+        const std::string stored =
+            rtrim_spaces(std::string(reinterpret_cast<const char*>(bytes), key_length_));
+        const std::string wanted = key.as_string();
+        if (stored < wanted) {
+            return -1;
+        }
+        if (stored > wanted) {
+            return 1;
+        }
+        return 0;
+    };
+
+    std::uint32_t page_number = root_page_;
+
+    while (page_number != 0) {
+        std::array<unsigned char, 512> page{};
+        input.seekg(static_cast<std::streamoff>(page_number) * 512, std::ios::beg);
+        input.read(reinterpret_cast<char*>(page.data()),
+                   static_cast<std::streamsize>(page.size()));
+        if (input.gcount() != static_cast<std::streamsize>(page.size())) {
+            throw std::runtime_error("truncated NDX page");
+        }
+
+        const std::uint32_t count = read_u32(page.data());
+        std::uint32_t next_page = 0;
+
+        for (std::uint32_t i = 0; i < count; ++i) {
+            const std::size_t entry_offset =
+                4 + static_cast<std::size_t>(i) * key_record_length_;
+            if (entry_offset + key_record_length_ > page.size()) {
+                throw std::runtime_error("corrupt NDX key entry");
+            }
+
+            const unsigned char* entry = page.data() + entry_offset;
+            const std::uint32_t lower_page = read_u32(entry);
+            const std::uint32_t record_number = read_u32(entry + 4);
+            const int comparison = compare_key(entry + 8);
+
+            if (comparison >= 0) {
+                if (lower_page != 0) {
+                    next_page = lower_page;
+                    break;
+                }
+
+                if (comparison == 0) {
+                    return record_number;
+                }
+
+                return 0;
+            }
+        }
+
+        if (next_page != 0) {
+            page_number = next_page;
+            continue;
+        }
+
+        const std::size_t tail_offset =
+            4 + static_cast<std::size_t>(count) * key_record_length_;
+        if (tail_offset + 4 <= page.size()) {
+            page_number = read_u32(page.data() + tail_offset);
+            if (page_number != 0) {
+                continue;
+            }
+        }
+
+        return 0;
+    }
+
+    return 0;
+}
+
 Vm::Vm(std::ostream& output) : output_(output) {}
 
 void Vm::run(const Program& program, const std::filesystem::path& working_directory) {
@@ -570,6 +817,27 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
                 path = working_directory / path;
             }
             table_ = std::make_unique<DbfTable>(path);
+            index_.reset();
+            found_ = false;
+            ++ip;
+            break;
+        }
+
+        case OpCode::OpenIndex: {
+            if (!table_) {
+                throw std::runtime_error("SET INDEX TO with no table open");
+            }
+
+            std::filesystem::path path = instruction.text;
+            if (!path.has_extension()) {
+                path += ".ndx";
+            }
+            if (path.is_relative()) {
+                path = working_directory / path;
+            }
+
+            index_ = std::make_unique<NdxIndex>(path);
+            found_ = false;
             ++ip;
             break;
         }
@@ -587,8 +855,21 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
                 throw std::runtime_error("SKIP with no table open");
             }
             table_->skip();
+            found_ = false;
             ++ip;
             break;
+
+        case OpCode::Seek: {
+            if (!table_ || !index_) {
+                throw std::runtime_error("SEEK requires an open table and active index");
+            }
+
+            const std::size_t record_number = index_->seek(pop());
+            found_ = record_number != 0;
+            table_->go_record(record_number);
+            ++ip;
+            break;
+        }
 
         case OpCode::ReplaceField:
             if (!table_) {
@@ -607,6 +888,41 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             stack_.push_back(Value(!pop().as_logical()));
             ++ip;
             break;
+
+        case OpCode::Add: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_number() + rhs.as_number()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Subtract: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_number() - rhs.as_number()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Multiply: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_number() * rhs.as_number()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Divide: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            if (rhs.as_number() == 0.0) {
+                throw std::runtime_error("division by zero");
+            }
+            stack_.push_back(Value(lhs.as_number() / rhs.as_number()));
+            ++ip;
+            break;
+        }
 
         case OpCode::Greater: {
             const Value rhs = pop();
@@ -655,6 +971,11 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             ++ip;
             break;
 
+        case OpCode::CallFound:
+            stack_.push_back(Value(found_));
+            ++ip;
+            break;
+
         case OpCode::Halt:
             return;
         }
@@ -677,16 +998,3 @@ Value Vm::pop() {
 
 Value Vm::load_name(const std::string& name) const {
     const std::string folded = upper(name);
-    const auto variable = variables_.find(folded);
-    if (variable != variables_.end()) {
-        return variable->second;
-    }
-
-    if (table_) {
-        return table_->field(folded);
-    }
-
-    throw std::runtime_error("unknown name: " + name);
-}
-
-} // namespace xabl

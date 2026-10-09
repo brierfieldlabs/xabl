@@ -72,6 +72,32 @@ int main(int argc, char** argv) {
 
         expect_statuses(fixtures / "customers.dbf");
 
+        const xabl::Program seek_program =
+            compiler.compile(read_text(fixtures / "legacy-seek.prg"));
+
+        std::ostringstream seek_output;
+        xabl::Vm seek_vm(seek_output);
+        seek_vm.run(seek_program, fixtures);
+
+        if (seek_output.str() != "Charlie\n") {
+            std::cerr << "unexpected SEEK output\nExpected:\nCharlie\nActual:\n"
+                      << seek_output.str();
+            return 1;
+        }
+
+        const xabl::Program total_program =
+            compiler.compile(read_text(fixtures / "legacy-total.prg"));
+
+        std::ostringstream total_output;
+        xabl::Vm total_vm(total_output);
+        total_vm.run(total_program, fixtures);
+
+        if (total_output.str() != "405.5\n") {
+            std::cerr << "unexpected arithmetic output\nExpected:\n405.5\nActual:\n"
+                      << total_output.str();
+            return 1;
+        }
+
         std::cout << "XABL smoke test passed\n";
         return 0;
     } catch (const std::exception& ex) {

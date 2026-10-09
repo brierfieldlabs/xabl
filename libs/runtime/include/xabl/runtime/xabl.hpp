@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <iosfwd>
 #include <memory>
@@ -42,17 +43,24 @@ enum class OpCode {
     LoadName,
     StoreName,
     OpenTable,
+    OpenIndex,
     GoTop,
     Skip,
+    Seek,
     ReplaceField,
     Print,
     UnaryNot,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
     Greater,
     Less,
     Equal,
     Jump,
     JumpIfFalse,
     CallEof,
+    CallFound,
     Halt
 };
 
@@ -83,6 +91,7 @@ public:
 
     [[nodiscard]] Value field(const std::string& name) const;
     void replace(const std::string& name, const Value& value);
+    void go_record(std::size_t one_based_record_number);
 
 private:
     struct Field {
@@ -104,6 +113,24 @@ private:
     [[nodiscard]] const Field& find_field(const std::string& name) const;
 };
 
+class NdxIndex {
+public:
+    explicit NdxIndex(std::filesystem::path path);
+
+    [[nodiscard]] std::size_t seek(const Value& key) const;
+    [[nodiscard]] const std::string& expression() const noexcept;
+
+private:
+    std::filesystem::path path_;
+    std::uint32_t root_page_{};
+    std::uint16_t key_length_{};
+    std::uint16_t key_type_{};
+    std::uint32_t key_record_length_{};
+    std::string expression_;
+
+    void load_header();
+};
+
 class Vm {
 public:
     explicit Vm(std::ostream& output);
@@ -117,6 +144,8 @@ private:
     std::vector<Value> stack_;
     std::unordered_map<std::string, Value> variables_;
     std::unique_ptr<DbfTable> table_;
+    std::unique_ptr<NdxIndex> index_;
+    bool found_{false};
 
     Value pop();
     [[nodiscard]] Value load_name(const std::string& name) const;

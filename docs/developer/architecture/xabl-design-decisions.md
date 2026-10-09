@@ -375,3 +375,131 @@ Studio must include:
 - Preferred project domain candidate: xabl.dev, subject to registration.
 
 [executed on device: git-workbench-brierfield (07c1d400-9390-48f2-99c8-e7f1f531a7ee)]
+
+## Additional Core Decisions — 2026-10-09
+
+### Everyday UX
+
+- Versioning, provenance, signatures, security controls, fingerprints, and compatibility history must be robust underneath but not front-and-centre during normal development.
+- The normal workflow should remain: open project, write code, run, debug, build.
+- Advanced trust, compatibility, provenance, and archival details remain accessible through dedicated dashboards, environment indicators, project properties, CLI diagnostics, and release tooling.
+
+### Artifact Verification and Builds
+
+- Studio and CLI automatically verify downloaded runtimes, modules, packages, container metadata, and other artifacts before use.
+- Verification covers signatures, checksums, provenance, compatibility, and publisher trust.
+- Successful verification stays quiet; unsigned, altered, incompatible, or unknown artifacts are surfaced clearly.
+- XABL supports an opt-in hermetic build mode for CI, release, archival, and high-assurance builds.
+- Hermetic builds block undeclared network and filesystem dependencies.
+- Successful builds carry a machine-generated environment fingerprint covering runtime, compiler, modules, dependency hashes, compatibility profile, target, and build settings.
+
+### Stable CLI Contract
+
+- The XABL CLI is a stable public automation interface.
+- Core command families include run, build, test, restore, package, publish, format, lint, doctor, env, compat, and migrate.
+- Human-friendly output is the default.
+- Stable machine-readable output is available for Studio, CI, editors, and scripts.
+- Machine-readable output has an explicit schema version.
+- CLI exit codes are stable, distinct, fully documented, and tested.
+- Stable automation surfaces, including commands, exit codes, structured schemas, manifest fields, lockfile behaviour, bytecode metadata, package metadata, and compatibility status codes, must have formal documentation and tests.
+
+### Preservation Rather Than Deprecation
+
+- Working public behaviour should not be deprecated merely because something newer exists.
+- Old syntax, APIs, commands, workflows, formats, and behaviours remain supported wherever technically possible.
+- If an older feature genuinely blocks architectural progress, move it behind a compatibility module/plugin/profile instead of removing it.
+- "Legacy" or "superseded" may be used to guide new projects without making old behaviour unavailable.
+- Studio and CLI automatically resolve required legacy modules for older projects.
+- No released XABL version should disappear from the official archive.
+- Preserve matching runtimes, SDKs, documentation, compatibility modules, package metadata, checksums/signatures, release notes, SBOMs, provenance data, and migration notes indefinitely.
+- Old documentation remains browsable online and selectable in Studio alongside the matching runtime.
+- Published package/module versions remain available indefinitely except where an unavoidable legal or critical security issue prevents distribution.
+- Preserve the compiler/toolchain/build environment used for official releases so old releases remain rebuildable, not merely downloadable.
+
+### Project Compatibility Contract
+
+- Every project has a formal compatibility contract describing runtime, language level, compatibility profile, required modules, file formats, and behavioural guarantees.
+- The compatibility contract is plain text, human-readable, version-controlled, and diffable.
+- Material changes that widen or weaken compatibility guarantees require explicit acknowledgement.
+- Projects maintain a compatibility history recording what changed, why, previous/new state, and whether validation passed.
+- Compatibility history is append-only by default; corrections are added as later entries rather than rewriting the past.
+
+### Debugging and Interactive Development
+
+- The debugger combines classic dBASE-style interactive inspection with modern breakpoints, stepping, watches, call stack, locals, and source navigation.
+- Database state is first-class debugger state: work areas, aliases, current record, filters, indexes, locks, and related runtime state are inspectable.
+- While paused, developers may modify variables, work areas, record position, filters, and other live state through the debugger/Command Window.
+- Studio clearly marks a paused session whose state has been modified.
+- Edit-and-continue is supported for safe changes; unsafe changes fall back to a controlled fast restart while preserving useful state where practical.
+- The Command Window is available even when no project is open.
+- Scratch XABL files and temporary workspaces can run without a full project manifest and can later be promoted into a project.
+
+### Data and Legacy System Understanding
+
+- Studio includes a visual data dictionary/schema editor for DBF and modern databases.
+- The schema editor covers fields, indexes, relationships, validation rules, and metadata.
+- Safe round-trip editing of legacy structures is supported where the target legacy format can represent the change exactly.
+- When exact round-trip is impossible, Studio explains the limitation and offers a compatible alternative or XABL-side metadata rather than silently altering semantics.
+- Studio includes a visual relationship/data-model view spanning DBF tables, indexes, aliases, and modern database relations.
+- Existing legacy applications can be scanned to infer tables, indexes, aliases, relationships, source references, and other architecture.
+- Inferred relationships are visibly distinguished from directly observed facts.
+
+### Legacy Analysis and Documentation
+
+- Legacy Analysis is a specialised workspace, not normal front-and-centre UI.
+- Studio can generate a complete documentation pack for legacy systems, potentially including source modules, procedures/functions, tables, fields, indexes, relations, aliases/work areas, forms, reports, menus, dependencies, entry points, call graphs, data flow, file formats, compatibility requirements, and unknown/ambiguous areas.
+- Generated documentation clearly distinguishes directly observed facts, inferred relationships, ambiguous/unknown behaviour, and unsupported/undecoded artifacts.
+- Documentation can be exported to Markdown/HTML and printable A4 PDF with diagrams and cross-references where useful.
+- Studio generates source-level call graphs and data-flow maps.
+- Static analysis can be supplemented by runtime tracing that records files, tables, procedures, forms, reports, indexes, and external processes actually touched during a session.
+- Guided legacy walkthroughs can combine runtime traces with notes, screenshots, and observations to preserve institutional knowledge.
+- Imported legacy projects can generate a concise "Start Here" onboarding guide with likely entry points, main tables, important workflows, dependencies, risky areas, and suggested first files to read.
+- The onboarding guide is refreshable as Studio learns from static analysis, runtime traces, walkthroughs, annotations, and compatibility findings.
+- Non-invasive developer annotations can attach knowledge to legacy artifacts without modifying original files.
+- Annotation visibility can be personal/private, project-team, or documentation-visible.
+- Named knowledge packs can bundle selected annotations, walkthrough notes, diagrams, onboarding material, compatibility findings, and documentation.
+- Studio can compare legacy-system versions at the architectural level, not only by line diff.
+- Change-impact analysis combines static analysis, runtime traces, annotations, and known relationships to show what a proposed modification may affect.
+
+### Application Generation and No/Low-Code
+
+- XABL includes a built-in application generator that can scaffold working applications from DBF sets or modern schemas.
+- Generated applications may include navigation, browse/edit forms, validation, search/filtering, reports, and target-specific surfaces.
+- DB-first and model-first workflows are equal citizens, with reconciliation tooling when schema and model drift.
+- One project can generate desktop, web, terminal, and server/API targets while sharing logic, validation, data access, and workflows where practical.
+- Generated and hand-written code stay clearly separated.
+- Regeneration only modifies generator-owned areas.
+- Generated applications include an ownership map distinguishing generator-owned, developer-owned, and safely customisable areas.
+- Application-generator templates are reusable and can define CRUD layouts, navigation, validation, report styles, deployment defaults, and other conventions.
+- Template packs use the normal XABL package/module system.
+- XABL deliberately supports no-code, low-code, and full-code workflows.
+- No-code output is never opaque: generated XABL source and designer definitions remain inspectable and editable.
+- No-code projects can graduate into hand-written XABL without migration into a different application model.
+- Reusable visual components and workflow blocks are supported and distributed through the ordinary package/module system.
+- Visual API/integration, job/scheduler, workflow, and state-machine tooling are valid XABL capabilities, but should normally be loadable modules rather than core runtime features.
+
+### General-Purpose Scope and Module Rule
+
+- XABL is a general-purpose application language with strong database heritage; it is not limited to business software.
+- Graphics/canvas, media/audio, charting, 2D game/application loops, device I/O, filesystem watching, raw networking, and similar specialist capabilities should be first-party where valuable but implemented as modules/plugins.
+- Standing rule: anything not fundamental to parsing, core runtime semantics, compatibility, or basic application execution should prefer the loadable module/plugin system.
+- Modules may load at project start or at runtime where safe.
+- Runtime unloading is supported only for modules that explicitly declare themselves unload-safe.
+- Development-time hot reload is supported where ABI/API compatibility and runtime state make it safe; otherwise use a controlled restart.
+- Studio itself is extensible by modules, including panels, inspectors, designers, commands, status indicators, project tools, new file handlers, and specialist tooling.
+
+### Core VM and Runtime Model
+
+- The initial XABL VM is a documented, versioned stack-based VM.
+- LLVM remains the native-code generation path for optimised release builds.
+- Automatic memory management is used for ordinary XABL values and objects.
+- Runtime memory management primarily uses reference counting with cycle handling underneath; ordinary XABL code does not manually allocate/free memory.
+- Normal XABL execution is single-threaded by default.
+- async/await handles I/O concurrency.
+- Explicit workers/threads provide real parallelism when required.
+- Shared mutable state is discouraged unless using clearly thread-safe structures.
+- Exceptions are unchecked by default.
+- The runtime uses a unified tagged value model for dynamic values, with specialised operations available when the compiler can prove types safely.
+- Truthiness, empty/null behaviour, implicit coercion, scoping, and other legacy semantics are governed by the active compatibility profile.
+- Modern XABL may have cleaner internal distinctions, such as null versus uninitialised, but these must never leak into a legacy profile in ways that break historical behaviour.
+- Hard rule: maximum compatibility with each supported legacy version/dialect settles detailed legacy-semantic questions unless a technical impossibility forces a documented exception.
