@@ -55,3 +55,7 @@ see `docs/decisions/2026-10-09-dbf-stale-write-protection.md`.
 Cursor movement uses overflow-safe saturating DBF SKIP arithmetic, with
 checked numeric conversion in the VM and bounded filtered/indexed
 iteration. See `docs/decisions/2026-10-09-skip-range-safety.md`.
+
+DBF III PLUS character C fields are supplied as raw, descriptor-width
+strings to the VM. TRIM() is an explicit operation, not a read-side
+normalisation. See the fixed-width DBF character-fields ADR.

@@ -80,20 +80,20 @@ int main(int argc, char** argv) {
         vm.run(compiler.compile(
             "USE shuffled\n"
             "SET INDEX TO shuffled\n"
-            "GO TOP\n? NAME\n? RECNO()\n"
-            "SKIP\n? NAME\n"
-            "SKIP\n? NAME\n"
-            "GO BOTTOM\n? NAME\n"
-            "SKIP -2\n? NAME\n"
-            "GO 1\n? NAME\n"
-            "SKIP -1\n? NAME\n"
+            "GO TOP\n? TRIM(NAME)\n? RECNO()\n"
+            "SKIP\n? TRIM(NAME)\n"
+            "SKIP\n? TRIM(NAME)\n"
+            "GO BOTTOM\n? TRIM(NAME)\n"
+            "SKIP -2\n? TRIM(NAME)\n"
+            "GO 1\n? TRIM(NAME)\n"
+            "SKIP -1\n? TRIM(NAME)\n"
             "SET FILTER TO BALANCE > 100\n"
-            "GO TOP\n? NAME\n"
-            "SKIP\n? NAME\n"
+            "GO TOP\n? TRIM(NAME)\n"
+            "SKIP\n? TRIM(NAME)\n"
             "SKIP\n? EOF()\n"
-            "GO BOTTOM\n? NAME\n"
+            "GO BOTTOM\n? TRIM(NAME)\n"
             "SET FILTER TO\n"
-            "GO TOP\n? NAME\n"), temp.path);
+            "GO TOP\n? TRIM(NAME)\n"), temp.path);
         const std::string expected =
             "Alice\n3\nBob\nCharlie\nCharlie\nAlice\n"
             "Charlie\nBob\nAlice\nCharlie\n.T.\nCharlie\nAlice\n";
@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
             "? EOF()\n? BOF()\n? FOUND()\n? RECNO()\n"
             "SEEK 'Bob'\n? EOF()\n? FOUND()\n? RECNO()\n"
             "SEEK 'ZZZZZZ'\n? EOF()\n? FOUND()\n? RECNO()\n"
-            "SKIP -1\n? NAME\n"), temp.path);
+            "SKIP -1\n? TRIM(NAME)\n"), temp.path);
         check(seeks.str() ==
                   ".T.\n.F.\n.F.\n4\n"
                   ".F.\n.T.\n2\n"
@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
             "USE shuffled\nSET INDEX TO shuffled\n"
             "GO TOP\nSKIP 1e18\n? EOF()\n"
             "SKIP -1e18\n? BOF()\n"
-            "SKIP\n? NAME\n"), temp.path);
+            "SKIP\n? TRIM(NAME)\n"), temp.path);
         check(wide_index_output.str() == ".T.\n.T.\nAlice\n",
               "extreme indexed SKIP did not saturate at boundaries");
 

@@ -6,21 +6,21 @@ DELETE
 
 SET DELETED ON
 GO TOP
-? name
+? TRIM(name)
 SKIP
-? name
+? TRIM(name)
 SKIP -1
-? name
+? TRIM(name)
 
 * Direct GO addresses the physical record even when deleted rows are hidden.
 GO 2
-? name
+? TRIM(name)
 ? DELETED()
 
 SET DELETED OFF
 GO TOP
 SKIP
-? name
+? TRIM(name)
 
 * Leave the shared fixture clean for later tests.
 RECALL

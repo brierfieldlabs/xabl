@@ -22,5 +22,5 @@ STORE 'A'' TO ''B' TO MESSAGE && doubled quote escaping
 USE customers && open a table
 SET FILTER TO LEFT(NAME,1) == 'C' && filter expression
 GO TOP && move in view
-?NAME&& even with no whitespace before comment
+?TRIM(NAME)&& even with no whitespace before comment
 USE && close the work area

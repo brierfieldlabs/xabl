@@ -9,8 +9,8 @@ SELECT 2
 USE customers ALIAS copy
 GO TOP
 
-? cust->name
-? copy->name
+? TRIM(cust->name)
+? TRIM(copy->name)
 
 SELECT cust
-? name
+? TRIM(name)

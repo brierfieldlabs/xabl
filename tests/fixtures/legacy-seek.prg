@@ -5,5 +5,5 @@ SET INDEX TO customers
 SEEK "Charlie"
 
 IF FOUND()
-    ? name
+    ? TRIM(name)
 ENDIF

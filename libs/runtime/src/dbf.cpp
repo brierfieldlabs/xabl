@@ -189,8 +189,15 @@ Value DbfTable::field(const std::string& name) const {
 
     if (field_info.type == 'L') {
         const char c = raw.empty() ? 'F' : static_cast<char>(std::toupper(raw.front()));
-        return Value(c == 'T' || c == 'Y');    }
+        return Value(c == 'T' || c == 'Y');
+    }
 
+    // A dBASE III PLUS character field is exactly its declared width,
+    // including right-hand padding. LEN(NAME) must report the field width;
+    // applications use TRIM(NAME) to remove trailing blanks explicitly.
+    if (field_info.type == 'C') {
+        return Value(raw);
+    }
     return Value(rtrim_spaces(raw));
 }
 

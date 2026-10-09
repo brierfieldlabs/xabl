@@ -86,7 +86,7 @@ DO WHILE NOT EOF()
         SKIP
         LOOP
     ENDIF
-    ? NAME
+    ? TRIM(NAME)
     IF NAME = "Charlie"
         EXIT
     ENDIF
