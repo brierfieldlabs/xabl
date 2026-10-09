@@ -592,6 +592,42 @@ int main(int argc, char** argv) {
         require(contained_output.str() == "Bob\nCharlie\n.T.\n",
                 "$ substring filter semantics failed: " + contained_output.str());
 
+        // The current III PLUS subset must refuse unsupported typed fields
+        // (D dates, M DBT memo pointers) instead of interpreting them as C.
+        // Mutate only disposable copies of known-good synthetic fixtures.
+        const auto validate_bad_descriptor = [&](const std::string& label,
+                                                  std::size_t at,
+                                                  const std::string& replacement) {
+            const auto path = temp.path / ("bad-schema-" + label + ".dbf");
+            fs::copy_file(fixtures / "customers.dbf", path);
+            { std::fstream file(path, std::ios::binary | std::ios::in |
+                                      std::ios::out);
+              file.seekp(static_cast<std::streamoff>(at));
+              file.write(replacement.data(),
+                         static_cast<std::streamsize>(replacement.size())); }
+            const auto bytes = content(path);
+            bool refused = false;
+            try { xabl::DbfTable invalid_table(path); }
+            catch (const std::runtime_error&) { refused = true; }
+            require(refused, "invalid DBF descriptor was accepted: " + label);
+            require(content(path) == bytes,
+                    "opening invalid DBF rewrote its bytes: " + label);
+        };
+        constexpr std::size_t header_bytes = 32;
+        constexpr std::size_t descriptor_bytes = 32;
+        // Descriptor[11]: type, [16]: width, [17]: decimals.
+        validate_bad_descriptor("date", header_bytes + 11, "D");
+        validate_bad_descriptor("memo", header_bytes + 11, "M");
+        validate_bad_descriptor("unknown", header_bytes + 11, "Z");
+        validate_bad_descriptor("character-decimals", header_bytes + 17,
+                                std::string(1, char(1)));
+        validate_bad_descriptor("numeric-decimals", header_bytes +
+                                descriptor_bytes + 17, std::string(1, char(10)));
+        validate_bad_descriptor("duplicate", header_bytes + descriptor_bytes,
+                                std::string("NAME\0", 5));
+        require(content(fixtures / "customers.dbf") == original,
+                "DBF schema tests modified the original fixture");
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

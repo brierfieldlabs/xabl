@@ -188,7 +188,7 @@ Value DbfTable::field(const std::string& name) const {
     }
 
     if (field_info.type == 'L') {
-        const char c = raw.empty() ? 'F' : static_cast<char>(std::toupper(raw.front()));
+        const char c = raw.empty() ? 'F' : static_cast<char>(std::toupper(static_cast<unsigned char>(raw.front())));
         return Value(c == 'T' || c == 'Y');
     }
 
@@ -198,7 +198,7 @@ Value DbfTable::field(const std::string& name) const {
     if (field_info.type == 'C') {
         return Value(raw);
     }
-    return Value(rtrim_spaces(raw));
+    throw std::runtime_error("unsupported DBF field type in reader");
 }
 
 void DbfTable::go_record(std::size_t one_based_record_number) {
@@ -252,13 +252,15 @@ void DbfTable::replace(const std::string& name, const Value& value) {
     } else if (field_info.type == 'L') {
         encoded = value.as_logical() ? "T" : "F";
         encoded.resize(field_info.length, ' ');
-    } else {
+    } else if (field_info.type == 'C') {
         encoded = value.as_string();
         if (encoded.size() > field_info.length) {
             encoded.resize(field_info.length);
         } else {
             encoded.resize(field_info.length, ' ');
         }
+    } else {
+        throw std::runtime_error("unsupported DBF field type in writer");
     }
 
     auto& record = records_[current_];
@@ -349,12 +351,28 @@ void DbfTable::load() {
         field_name = upper(trim(field_name));
 
         const std::size_t length = descriptor[16];
+        const char type = static_cast<char>(descriptor[11]);
+        const std::size_t decimals = descriptor[17];
+        // Unknown types must not be treated as character data. In
+        // particular, D is a typed date and M is a DBT memo pointer;
+        // interpreting either as a string would silently corrupt data.
+        if (type != 'C' && type != 'N' && type != 'F' && type != 'L') {
+            throw std::runtime_error("unsupported DBF field type: " +
+                                     std::string(1, type));
+        }
         if (field_name.empty() || length == 0 ||
-            offset > record_length_ || length > record_length_ - offset) {
+            offset > record_length_ || length > record_length_ - offset ||
+            (type == 'L' && length != 1) ||
+            ((type == 'C' || type == 'L') && decimals != 0) ||
+            ((type == 'N' || type == 'F') && decimals >= length)) {
             throw std::runtime_error("invalid DBF field descriptor layout");
         }
-        fields_.push_back({field_name, static_cast<char>(descriptor[11]),
-                           offset, length, descriptor[17]});
+        if (std::any_of(fields_.begin(), fields_.end(),
+                        [&](const Field& field) { return field.name == field_name; })) {
+            throw std::runtime_error("duplicate DBF field name: " + field_name);
+        }
+        fields_.push_back({field_name, type,
+                           offset, length, decimals});
         offset += length;
     }
 

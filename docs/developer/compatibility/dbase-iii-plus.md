@@ -159,3 +159,12 @@ GO with a numeric physical record target validates that the value is
 finite, nonnegative and representable as the host record index before
 conversion. Values beyond RECCOUNT reach EOF; invalid targets are
 rejected without moving the record pointer. This is a host safety rule.
+
+## DBF field type admission
+
+Only C, N, F and L descriptors are executable in the current DBF
+reader/writer subset. D (date), M (memo) and unknown later-dialect
+descriptors now fail explicitly, rather than being silently treated as
+strings. This is a deliberate compatibility limitation pending proper
+typed date storage and DBT support, NOT historical dBASE behaviour.
+Duplicate field names and invalid width/decimal descriptors are refused.
