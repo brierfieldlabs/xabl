@@ -238,7 +238,10 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
                 throw std::runtime_error("NDX SEEK references an invalid DBF record");
             }
             area.found = record_number != 0;
-            area.table->go_record(record_number);
+            // In dBASE III PLUS, an unsuccessful indexed SEEK leaves the
+            // record pointer at EOF rather than BOF (RECNO=RECCOUNT+1).
+            area.table->go_record(
+                record_number == 0 ? area.table->reccount() + 1 : record_number);
             ++ip;
             break;
         }

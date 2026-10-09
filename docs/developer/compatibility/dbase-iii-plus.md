@@ -62,6 +62,8 @@ independent original-product reference files are still outstanding.
   Indexed navigation is read-only; there is no NDX write maintenance yet.
   NDX SEEK and ordered traversal both validate physical page references,
   key counts and out-of-range records, rejecting corrupt files.
+  A missing SEEK key sets FOUND() false and moves to physical EOF
+  (RECNO() = RECCOUNT()+1), not BOF.
 - String ordering, collations, locale/code-page handling and later-dialect
   `==` differences require separate compatibility work.
 - The DBF writer is single-writer only. There is no cross-process locking,
