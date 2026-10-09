@@ -12,6 +12,7 @@
 #include <cstring>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 
@@ -221,6 +222,16 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             }
 
             const double requested = pop().as_number();
+            // Avoid undefined float-to-integer casts. One-past-maximum
+            // values round exactly to the bound in a double, so reject
+            // those too. The minimum ptrdiff_t remains representable.
+            const double exclusive_upper = std::ldexp(
+                1.0, std::numeric_limits<std::ptrdiff_t>::digits);
+            if (!std::isfinite(requested) ||
+                requested >= exclusive_upper ||
+                requested < -exclusive_upper) {
+                throw std::runtime_error("SKIP count is outside supported range");
+            }
             skip_visible(area, static_cast<std::ptrdiff_t>(requested));
             area.found = false;
             ++ip;
@@ -815,10 +826,11 @@ void Vm::skip_visible(WorkArea& area, std::ptrdiff_t count) {
     }
 
     const std::ptrdiff_t direction = count > 0 ? 1 : -1;
-    const std::size_t matches_to_skip =
-        static_cast<std::size_t>(count > 0 ? count : -count);
+    const std::uintmax_t matches_to_skip = count > 0
+        ? static_cast<std::uintmax_t>(count)
+        : static_cast<std::uintmax_t>(-(count + 1)) + 1;
 
-    for (std::size_t moved = 0; moved < matches_to_skip; ++moved) {
+    for (std::uintmax_t moved = 0; moved < matches_to_skip; ++moved) {
         area.table->skip(direction);
 
         while (!area.table->bof() && !area.table->eof() &&

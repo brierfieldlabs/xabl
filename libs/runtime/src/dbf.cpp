@@ -144,24 +144,32 @@ void DbfTable::append_blank() {
 }
 
 void DbfTable::skip(std::ptrdiff_t count) noexcept {
-    if (count == 0) {
+    if (count == 0) return;
+
+    if (count > 0) {
+        // Calculate in the unsigned record-number domain rather than
+        // overflowing signed current_position + count.
+        const auto distance = static_cast<std::size_t>(count);
+        if (before_first_) {
+            before_first_ = false;
+            current_ = std::min(distance - 1, records_.size());
+            return;
+        }
+        const auto until_eof = records_.size() - current_;
+        current_ = distance >= until_eof ? records_.size()
+                                         : current_ + distance;
         return;
     }
 
-    const std::ptrdiff_t current_position = before_first_
-        ? -1
-        : static_cast<std::ptrdiff_t>(current_);
-    const std::ptrdiff_t target = current_position + count;
-
-    if (target < 0) {
+    if (before_first_) return;
+    // -(PTRDIFF_MIN) is undefined, whereas -(count + 1) is representable.
+    const auto distance = static_cast<std::size_t>(-(count + 1)) + 1;
+    if (distance > current_) {
         before_first_ = true;
         current_ = 0;
-        return;
+    } else {
+        current_ -= distance;
     }
-
-    before_first_ = false;
-    const auto unsigned_target = static_cast<std::size_t>(target);
-    current_ = std::min(unsigned_target, records_.size());
 }
 
 Value DbfTable::field(const std::string& name) const {

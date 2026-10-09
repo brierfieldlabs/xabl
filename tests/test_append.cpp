@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -444,6 +445,47 @@ int main(int argc, char** argv) {
                 "DBF trailer drift was not rejected cleanly");
         require(content(fixtures / "customers.dbf") == original,
                 "write-safety tests modified the original DBF fixture");
+
+        // Extreme navigation must saturate without signed overflow.
+        fs::copy_file(fixtures / "customers.dbf", temp.path / "wide-skip.dbf");
+        xabl::DbfTable wide_skip(temp.path / "wide-skip.dbf");
+        wide_skip.go_top();
+        wide_skip.skip(std::numeric_limits<std::ptrdiff_t>::max());
+        require(wide_skip.eof(), "large positive DBF SKIP missed EOF");
+        wide_skip.skip(std::numeric_limits<std::ptrdiff_t>::min());
+        require(wide_skip.bof(), "minimum signed SKIP missed BOF");
+        wide_skip.skip(1);
+        require(!wide_skip.bof() && wide_skip.recno() == 1,
+                "SKIP 1 did not recover from BOF");
+        wide_skip.skip(-1);
+        require(wide_skip.bof(), "SKIP -1 did not enter BOF");
+        wide_skip.skip(std::numeric_limits<std::ptrdiff_t>::max());
+        require(wide_skip.eof(), "large SKIP from BOF missed EOF");
+        wide_skip.skip(-1);
+        require(wide_skip.recno() == 3, "SKIP -1 from EOF missed last row");
+
+        std::ostringstream wide_output;
+        xabl::Vm wide_vm(wide_output);
+        wide_vm.run(compiler.compile(
+            "USE wide-skip\nGO TOP\n"
+            "SKIP 1e18\n? EOF()\n"
+            "SKIP -1e18\n? BOF()\n"
+            "SKIP 1\n? RECNO()\n"
+            "SET FILTER TO BALANCE > 100\n"
+            "SKIP 1e18\n? EOF()\n"
+            "SKIP -1e18\n? BOF()\n"), temp.path);
+        require(wide_output.str() == ".T.\n.T.\n1\n.T.\n.T.\n",
+                "extreme filtered/unindexed SKIP state incorrect: " +
+                    wide_output.str());
+
+        std::ostringstream bad_skip_output;
+        xabl::Vm bad_skip_vm(bad_skip_output);
+        bad_skip_vm.run(compiler.compile("USE wide-skip\nGO TOP"), temp.path);
+        expect_runtime_error(compiler, bad_skip_vm, "SKIP 1e100", temp.path);
+        expect_runtime_error(compiler, bad_skip_vm, "SKIP -1e100", temp.path);
+        bad_skip_vm.run(compiler.compile("? RECNO()"), temp.path);
+        require(bad_skip_output.str() == "1\n",
+                "invalid SKIP changed the record cursor");
 
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
