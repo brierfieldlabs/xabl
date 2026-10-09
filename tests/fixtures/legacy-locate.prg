@@ -4,11 +4,11 @@ USE customers
 
 LOCATE FOR balance > 100
 ? FOUND()
-? name
+? TRIM(name)
 
 CONTINUE
 ? FOUND()
-? name
+? TRIM(name)
 
 CONTINUE
 ? FOUND()

@@ -6,7 +6,7 @@ GO TOP
 
 DO WHILE .NOT. EOF()
     IF balance > 100
-        ? name
+        ? TRIM(name)
         REPLACE status WITH "REVIEW"
     ENDIF
     SKIP

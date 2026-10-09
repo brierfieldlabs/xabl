@@ -26,17 +26,17 @@ void expect_statuses(const std::filesystem::path& table_path) {
     xabl::DbfTable table(table_path);
     table.go_top();
 
-    if (table.field("status").as_string() != "REVIEW") {
+    if (table.field("status").as_string() != std::string("REVIEW") + std::string(4, ' ')) {
         throw std::runtime_error("Alice status was not persisted");
     }
 
     table.skip();
-    if (!table.field("status").as_string().empty()) {
+    if (table.field("status").as_string() != std::string(10, ' ')) {
         throw std::runtime_error("Bob status should remain blank");
     }
 
     table.skip();
-    if (table.field("status").as_string() != "REVIEW") {
+    if (table.field("status").as_string() != std::string("REVIEW") + std::string(4, ' ')) {
         throw std::runtime_error("Charlie status was not persisted");
     }
 }

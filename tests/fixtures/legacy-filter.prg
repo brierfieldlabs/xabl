@@ -4,20 +4,20 @@ USE customers
 SET FILTER TO balance > 150
 
 * Filter does not move the current record until navigation occurs.
-? name
+? TRIM(name)
 
 GO TOP
-? name
+? TRIM(name)
 
 * Direct GO can still land on a record hidden by the active filter.
 GO 2
-? name
+? TRIM(name)
 
 * Sequential navigation resumes through the filter.
 SKIP
-? name
+? TRIM(name)
 
 SET FILTER TO
 GO TOP
 SKIP
-? name
+? TRIM(name)

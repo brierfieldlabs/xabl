@@ -70,17 +70,17 @@ int main(int argc, char** argv) {
             "REPLACE NAME WITH 'Doris'\n"
             "REPLACE BALANCE WITH 55.5\n"
             "REPLACE STATUS WITH 'NEW'\n"
-            "? NAME\n"
+            "? TRIM(NAME)\n"
             "SET FILTER TO BALANCE > 100\n"
             "GO BOTTOM\n"
-            "? NAME\n"
+            "? TRIM(NAME)\n"
             "SET FILTER TO\n"
             "GO BOTTOM\n"
-            "? NAME\n"
+            "? TRIM(NAME)\n"
             "DELETE\n"
             "SET DELETED ON\n"
             "GO BOTTOM\n"
-            "? NAME\n"
+            "? TRIM(NAME)\n"
             "SET DELETED OFF\n"
             "GO BOTTOM\n"
             "? DELETED()\n"
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
         require(reopened.reccount() == 4, "APPEND count not persisted");
         reopened.go_bottom();
         require(reopened.recno() == 4, "APPEND physical record number invalid");
-        require(reopened.field("NAME").as_string() == "Doris",
+        require(reopened.field("NAME").as_string() == std::string("Doris") + std::string(15, ' '),
                 "APPEND character value not persisted");
         require(reopened.field("BALANCE").as_number() == 55.5,
                 "APPEND numeric value not persisted");
@@ -166,10 +166,10 @@ int main(int argc, char** argv) {
         xabl::DbfTable ledger(temp.path / "ledger.dbf");
         require(ledger.reccount() == 4, "mini-app did not append a physical record");
         ledger.go_top();
-        require(ledger.field("STATUS").as_string() == "REVIEW",
+        require(ledger.field("STATUS").as_string() == std::string("REVIEW") + std::string(4, ' '),
                 "mini-app did not persist review status");
         ledger.go_bottom();
-        require(ledger.field("NAME").as_string() == "Doris",
+        require(ledger.field("NAME").as_string() == std::string("Doris") + std::string(15, ' '),
                 "mini-app did not persist appended name");
         require(content(fixtures / "customers.dbf") == original,
                 "mini-application wrote to source fixture");
@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
             "? EOF()\n"
             "SET EXACT OFF\n"
             "GO TOP\n"
-            "? NAME\n"), temp.path);
+            "? TRIM(NAME)\n"), temp.path);
         require(exact_output.str() == ".F.\n.T.\nAlice\n",
                 "SET EXACT was not applied to active work-area filters: " +
                     exact_output.str());
@@ -211,10 +211,12 @@ int main(int argc, char** argv) {
         empty.append_blank();
         require(empty.reccount() == 1 && empty.recno() == 1,
                 "APPEND to zero-record DBF failed");
+        require(empty.field("NAME").as_string() == std::string(20, ' '),
+                "APPEND BLANK must retain an entirely space-padded C field");
         empty.replace("NAME", xabl::Value(std::string("First")));
         xabl::DbfTable reloaded_empty(empty_path);
         reloaded_empty.go_top();
-        require(reloaded_empty.field("NAME").as_string() == "First",
+        require(reloaded_empty.field("NAME").as_string() == std::string("First") + std::string(15, ' '),
                 "first record in initially empty DBF not persisted");
 
         // Corrupt headers must fail safely before allocating the declared
@@ -259,7 +261,7 @@ int main(int argc, char** argv) {
                     temp.path);
         xabl::DbfTable verified_edit(temp.path / "indexedit.dbf");
         verified_edit.go_top();
-        require(verified_edit.field("NAME").as_string() == "Good",
+        require(verified_edit.field("NAME").as_string() == std::string("Good") + std::string(16, ' '),
                 "REPLACE failed after index closed");
         require(content(fixtures / "customers.dbf") == original,
                 "DBF integrity tests modified the original fixture");
@@ -271,9 +273,9 @@ int main(int argc, char** argv) {
         text_filter_vm.run(compiler.compile(
             "USE branch\n"
             "SET FILTER TO UPPER(NAME) = 'BOB'\n"
-            "GO TOP\n? NAME\n"
-            "SET FILTER TO LEN(UPPER(NAME)) > 5\n"
-            "GO TOP\n? NAME\n"), temp.path);
+            "GO TOP\n? TRIM(NAME)\n"
+            "SET FILTER TO LEN(TRIM(UPPER(NAME))) > 5\n"
+            "GO TOP\n? TRIM(NAME)\n"), temp.path);
         require(text_filter_output.str() == "Bob\nCharlie\n",
                 "character functions in filters failed: " +
                     text_filter_output.str());
@@ -285,12 +287,12 @@ int main(int argc, char** argv) {
         slice_vm.run(compiler.compile(
             "USE branch\n"
             "SET FILTER TO LEFT(NAME,3) == 'Cha'\n"
-            "GO TOP\n? NAME\n"
+            "GO TOP\n? TRIM(NAME)\n"
             "SET FILTER TO SUBSTR(NAME,2,2) == 'ob'\n"
-            "GO TOP\n? NAME\n"
-            "SET FILTER TO RIGHT(NAME,1) == 'e'\n"
-            "GO TOP\n? NAME\n"
-            "SKIP\n? NAME\n"), temp.path);
+            "GO TOP\n? TRIM(NAME)\n"
+            "SET FILTER TO RIGHT(TRIM(NAME),1) == 'e'\n"
+            "GO TOP\n? TRIM(NAME)\n"
+            "SKIP\n? TRIM(NAME)\n"), temp.path);
         require(slice_output.str() == "Charlie\nBob\nAlice\nCharlie\n",
                 "string slicing in filters failed: " + slice_output.str());
 
@@ -299,9 +301,9 @@ int main(int argc, char** argv) {
         concat_vm.run(compiler.compile(
             "USE branch\n"
             "SET FILTER TO TRIM(NAME) + '!' == 'Charlie!'\n"
-            "GO TOP\n? NAME\n"
-            "SET FILTER TO LEFT(NAME,1) + RIGHT(NAME,1) == 'Ae'\n"
-            "GO TOP\n? NAME\n"), temp.path);
+            "GO TOP\n? TRIM(NAME)\n"
+            "SET FILTER TO LEFT(NAME,1) + RIGHT(TRIM(NAME),1) == 'Ae'\n"
+            "GO TOP\n? TRIM(NAME)\n"), temp.path);
         require(concatenation_output.str() == "Charlie\nAlice\n",
                 "string concatenation in DBF filters failed: " +
                     concatenation_output.str());
@@ -311,13 +313,13 @@ int main(int argc, char** argv) {
         ordering_vm.run(compiler.compile(
             "USE branch\n"
             "SET FILTER TO NAME >= 'Bob'\n"
-            "GO TOP\n? NAME\n"
-            "SKIP\n? NAME\n"
+            "GO TOP\n? TRIM(NAME)\n"
+            "SKIP\n? TRIM(NAME)\n"
             "SET FILTER TO NAME < 'Bob'\n"
-            "GO TOP\n? NAME\n"
+            "GO TOP\n? TRIM(NAME)\n"
             "SET FILTER TO NAME # 'Bob'\n"
-            "GO TOP\n? NAME\n"
-            "SKIP\n? NAME\n"), temp.path);
+            "GO TOP\n? TRIM(NAME)\n"
+            "SKIP\n? TRIM(NAME)\n"), temp.path);
         require(ordering_output.str() ==
                     "Bob\nCharlie\nAlice\nAlice\nCharlie\n",
                 "character ordering in filters failed: " +
@@ -328,9 +330,9 @@ int main(int argc, char** argv) {
         search_vm.run(compiler.compile(
             "USE branch\n"
             "SET FILTER TO AT('ob', NAME) > 0\n"
-            "GO TOP\n? NAME\n"
+            "GO TOP\n? TRIM(NAME)\n"
             "SET FILTER TO AT('ar', NAME) > 0\n"
-            "GO TOP\n? NAME\n"
+            "GO TOP\n? TRIM(NAME)\n"
             "SET FILTER TO AT('not-here', NAME) > 0\n"
             "GO TOP\n? EOF()\n"), temp.path);
         require(search_output.str() == "Bob\nCharlie\n.T.\n",
@@ -342,7 +344,7 @@ int main(int argc, char** argv) {
         with_vm.run(compiler.compile(
             "USE branch\nGO TOP\n"
             "REPLACE STATUS WITH UPPER('with note')\n"
-            "? STATUS\nUSE\n"), temp.path);
+            "? TRIM(STATUS)\nUSE\n"), temp.path);
         require(with_output.str() == "WITH NOTE\n",
                 "quoted WITH in REPLACE expression parsed incorrectly: " +
                     with_output.str());
@@ -351,11 +353,11 @@ int main(int argc, char** argv) {
         xabl::Vm replicate_filter_vm(replicate_filter_output);
         replicate_filter_vm.run(compiler.compile(
             "USE branch\n"
-            "SET FILTER TO RIGHT(NAME,1) == REPLICATE('e',1)\n"
-            "GO TOP\n? NAME\n"
-            "SKIP\n? NAME\n"
+            "SET FILTER TO RIGHT(TRIM(NAME),1) == REPLICATE('e',1)\n"
+            "GO TOP\n? TRIM(NAME)\n"
+            "SKIP\n? TRIM(NAME)\n"
             "SET FILTER TO LEN(SPACE(2)) == 2\n"
-            "GO TOP\n? NAME\n"), temp.path);
+            "GO TOP\n? TRIM(NAME)\n"), temp.path);
         require(replicate_filter_output.str() == "Alice\nCharlie\nAlice\n",
                 "SPACE or REPLICATE inside filter failed: " +
                     replicate_filter_output.str());
@@ -403,7 +405,7 @@ int main(int argc, char** argv) {
         stale.set_deleted(true);
         xabl::DbfTable verified_stale(stale_path);
         verified_stale.go_top();
-        require(verified_stale.field("NAME").as_string() == "Fresh" &&
+        require(verified_stale.field("NAME").as_string() == std::string("Fresh") + std::string(15, ' ') &&
                     verified_stale.deleted(), "recovered DBF update did not persist");
 
         stale.go_record(0);
@@ -486,6 +488,32 @@ int main(int argc, char** argv) {
         bad_skip_vm.run(compiler.compile("? RECNO()"), temp.path);
         require(bad_skip_output.str() == "1\n",
                 "invalid SKIP changed the record cursor");
+
+        // Fixed-width C fields retain trailing DBF padding in expressions.
+        // A user explicitly requests TRIM() when the field's actual text
+        // length or an unpadded output is wanted.
+        fs::copy_file(fixtures / "customers.dbf", temp.path / "fixed-width.dbf");
+        xabl::DbfTable fixed_width(temp.path / "fixed-width.dbf");
+        fixed_width.go_top();
+        require(fixed_width.field("NAME").as_string() ==
+                    std::string("Alice") + std::string(15, ' '),
+                "DBF character field lost its declared 20-byte width");
+        require(fixed_width.field("STATUS").as_string().size() == 10,
+                "DBF status field did not retain its 10-byte width");
+        std::ostringstream padded_output;
+        xabl::Vm padded_vm(padded_output);
+        padded_vm.run(compiler.compile(
+            "USE fixed-width\nGO TOP\n"
+            "? LEN(NAME)\n? LEN(TRIM(NAME))\n"
+            "? LEFT(NAME,5)\n? RIGHT(NAME,1)\n? NAME\n"
+            "? NAME = 'Alice'\n? NAME == 'Alice'\n"
+            "? TRIM(NAME) == 'Alice'\n? LEN(UPPER(NAME))\n"
+            "SET EXACT ON\n? NAME = 'Alice'\n"), temp.path);
+        require(padded_output.str() ==
+                    std::string("20\n5\nAlice\n \nAlice") +
+                    std::string(15,' ') +
+                    "\n.T.\n.F.\n.T.\n20\n.T.\n",
+                "LEN, TRIM, RIGHT or displayed DBF padding is inconsistent");
 
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;

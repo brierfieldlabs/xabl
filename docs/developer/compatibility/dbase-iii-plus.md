@@ -101,3 +101,11 @@ independent original-product reference files are still outstanding.
 
 - Historical SET EXACT reference:
   https://www.terrellamedia.com/wp-content/uploads/2022/01/dBASE-Language-Handbook-by-David-M-Kalman-Final.pdf
+
+## Fixed-width character values
+
+DBF C fields preserve their declared length, including trailing ASCII
+spaces. LEN(NAME) reports field width, while LEN(TRIM(NAME)) reports the
+unpadded content length. Printing an untrimmed field also prints spaces.
+Legacy test programs now use TRIM() explicitly for compact names. See
+the 2026-10-09 fixed-width character-fields ADR. Codepages remain pending.

@@ -27,4 +27,4 @@ ENDIF
 ? (10 + 2) * 3
 
 LOCATE FOR balance > 100 .AND. name <> "Alice"
-? name
+? TRIM(name)
