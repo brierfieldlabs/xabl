@@ -15,7 +15,7 @@ There are now two executables:
 
 - `xabl`: compile/run a legacy `.prg` source from the shell.
 - `xabl-tui`: DOS-inspired text IDE with a full-screen blue editor, keyboard
-  shortcuts, source-file editing, compile-only check and run/output screen.
+  shortcuts, syntax colouring, F2 file browser, source-file editing,\n  compile-only check and run/output screen.
   Built automatically where the optional ncurses development library is found.
 
 To build on Linux:
