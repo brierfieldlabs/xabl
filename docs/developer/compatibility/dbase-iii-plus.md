@@ -7,6 +7,11 @@ independent original-product reference files are still outstanding.
 
 ## Supported in these slices
 
+- The character `+` and `-` operators concatenate strings.
+  Plus preserves both operands verbatim; minus moves trailing ASCII
+  spaces from the left operand behind the concatenated right operand.
+  Numeric arithmetic retains its normal behaviour. Mixed types currently
+  raise an explicit error pending dialect-specific conversions.
 - Character functions `LEN()`, `UPPER()`, `LOWER()`,
   `TRIM()`/`RTRIM()`, `LTRIM()`, `LEFT()`, `RIGHT()`, and
   `SUBSTR()` with an optional length argument. Nested expressions and

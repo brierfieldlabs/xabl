@@ -19,7 +19,9 @@ From weakest to strongest precedence:
 Unary `.NOT.` and `NOT` consume a comparison expression but bind more
 tightly than AND/OR, so `NOT balance < 100` means `NOT (balance < 100)`.
 The `=` equality opcode respects the VM's SET EXACT state, while `==` emits
-a distinct strict-equality opcode. Binary operators are left-associative. Parentheses explicitly override
+a distinct strict-equality opcode. Add/subtract bytecode is type-dispatched between numeric arithmetic and
+traditional character string concatenation, with shared VM/filter handling.
+Binary operators are left-associative. Parentheses explicitly override
 precedence. Tokenisation respects quoted strings and the compact
 `alias->field` syntax.
 
