@@ -3,6 +3,7 @@
 #include "editor_buffer.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <fstream>
 #include <iterator>
@@ -136,6 +137,24 @@ bool EditorBuffer::dirty() const noexcept { return dirty_; }
 void EditorBuffer::set_cursor(std::size_t row, std::size_t column) {
     cursor_.row = std::min(row, lines_.size() - 1);
     cursor_.column = std::min(column, lines_[cursor_.row].size());
+}
+
+bool EditorBuffer::go_to_line(std::size_t one_based_line) {
+    if (one_based_line == 0 || one_based_line > lines_.size()) return false;
+    set_cursor(one_based_line - 1, 0);
+    return true;
+}
+
+std::optional<std::size_t> diagnostic_source_line(std::string_view diagnostic) {
+    constexpr std::string_view prefix{"line "};
+    if (!diagnostic.starts_with(prefix)) return std::nullopt;
+    const char* first = diagnostic.data() + prefix.size();
+    const char* final = diagnostic.data() + diagnostic.size();
+    std::size_t number{};
+    const auto [end, error] = std::from_chars(first, final, number);
+    if (error != std::errc{} || end == first || number == 0 ||
+        end == final || *end != ':') return std::nullopt;
+    return number;
 }
 
 void EditorBuffer::move_left() {

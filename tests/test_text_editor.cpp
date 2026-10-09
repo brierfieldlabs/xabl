@@ -62,6 +62,21 @@ int main() {
         check(editor.find_next("USE") && editor.cursor().row == 0,
               "search wraps around");
         check(!editor.find_next("MISSING"), "missing search term");
+        check(editor.go_to_line(2) && editor.cursor().row == 1 &&
+              editor.cursor().column == 0, "go to second source line");
+        const auto unchanged = editor.cursor();
+        check(!editor.go_to_line(0) && !editor.go_to_line(3) &&
+              editor.cursor() == unchanged, "invalid line must not move cursor");
+        check(editor.go_to_line(1) && editor.cursor().row == 0,
+              "go to first source line");
+        using xabl::tui::diagnostic_source_line;
+        check(diagnostic_source_line("line 2: unsupported statement").value() == 2,
+              "parse compiler line number");
+        check(!diagnostic_source_line("line 0: invalid") &&
+              !diagnostic_source_line("error: line 2") &&
+              !diagnostic_source_line("line 2x: error") &&
+              !diagnostic_source_line("line 9999999999999999999999: overflow"),
+              "reject invalid diagnostic locations");
 
         const auto file = directory / "demo.prg";
         editor.save(file);
