@@ -168,3 +168,11 @@ descriptors now fail explicitly, rather than being silently treated as
 strings. This is a deliberate compatibility limitation pending proper
 typed date storage and DBT support, NOT historical dBASE behaviour.
 Duplicate field names and invalid width/decimal descriptors are refused.
+
+## Work-area selection
+
+SELECT 1 through SELECT 10, or SELECT A through SELECT J, chooses one
+of the ten dBASE III PLUS work areas. File aliases remain usable as
+selectors. Numbers outside this range and unknown aliases are rejected
+without changing the active work area. Other historical dialects may
+support different work-area limits.

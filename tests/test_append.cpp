@@ -628,6 +628,26 @@ int main(int argc, char** argv) {
         require(content(fixtures / "customers.dbf") == original,
                 "DBF schema tests modified the original fixture");
 
+        std::ostringstream areas_output;
+        xabl::Vm areas_vm(areas_output);
+        areas_vm.run(compiler.compile(
+            "SELECT a\nUSE branch ALIAS FIRST\nGO 2\n"
+            "SELECT j\nUSE ledger ALIAS TENTH\nGO 3\n"
+            "? TRIM(NAME)\nSELECT A\n? TRIM(NAME)\n"
+            "SELECT 10\n? TRIM(NAME)\n"
+            "SELECT FIRST\n? RECNO()\n"
+            "SELECT TENTH\n? RECNO()\n"), temp.path);
+        require(areas_output.str() == "Charlie\nBob\nCharlie\n2\n3\n",
+                "dBASE A-J work area mapping failed: " + areas_output.str());
+        expect_runtime_error(compiler, areas_vm, "SELECT 11", temp.path);
+        expect_runtime_error(compiler, areas_vm, "SELECT 0", temp.path);
+        expect_runtime_error(compiler, areas_vm, "SELECT 999999999999999999", temp.path);
+        expect_runtime_error(compiler, areas_vm, "SELECT K", temp.path);
+        areas_vm.run(compiler.compile("? RECNO()"), temp.path);
+        require(areas_output.str() ==
+                    "Charlie\nBob\nCharlie\n2\n3\n3\n",
+                "invalid SELECT unexpectedly changed active work area");
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {
