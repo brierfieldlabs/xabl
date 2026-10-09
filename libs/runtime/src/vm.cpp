@@ -3,6 +3,7 @@
 #include <xabl/runtime/xabl.hpp>
 #include "internal.hpp"
 #include "comparison.hpp"
+#include "text_functions.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -278,6 +279,15 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::CallLen:
+        case OpCode::CallUpper:
+        case OpCode::CallLower:
+        case OpCode::CallTrim:
+        case OpCode::CallLTrim:
+            stack_.push_back(apply_text_function(instruction.opcode, pop()));
+            ++ip;
+            break;
+
         case OpCode::Print:
             output_ << pop().as_string() << '\n';
             ++ip;
@@ -501,6 +511,14 @@ Value Vm::evaluate_expression(const Program& program) const {
 
         case OpCode::LoadName:
             values.push_back(load_name(instruction.text));
+            break;
+
+        case OpCode::CallLen:
+        case OpCode::CallUpper:
+        case OpCode::CallLower:
+        case OpCode::CallTrim:
+        case OpCode::CallLTrim:
+            values.push_back(apply_text_function(instruction.opcode, pop_value()));
             break;
 
         case OpCode::UnaryNot:

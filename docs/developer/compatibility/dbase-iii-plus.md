@@ -7,6 +7,12 @@ independent original-product reference files are still outstanding.
 
 ## Supported in these slices
 
+- Basic character functions `LEN()`, `UPPER()`, `LOWER()`,
+  `TRIM()`/`RTRIM()` and `LTRIM()`, including nesting and expression
+  evaluation inside active filters. This subset requires string operands
+  and operates on 8-bit bytes using ASCII case conversion. Codepage-aware
+  case mapping is not yet supported.
+
 - `SET EXACT ON/OFF`: global character equality mode; OFF (default)
   compares the left string against the right prefix, ON compares after
   trimming trailing ASCII spaces. `==` is separate strict byte equality.
