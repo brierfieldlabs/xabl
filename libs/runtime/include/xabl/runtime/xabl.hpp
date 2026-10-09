@@ -47,6 +47,7 @@ enum class OpCode {
     OpenTable,
     OpenIndex,
     SetFilter,
+    SetDeletedVisibility,
     SelectArea,
     GoTop,
     GoRecord,
@@ -175,6 +176,7 @@ private:
     std::unordered_map<std::string, Value> variables_;
     std::unordered_map<int, WorkArea> work_areas_;
     int active_area_{1};
+    bool hide_deleted_{false};
 
     Value pop();
     [[nodiscard]] Value load_name(const std::string& name) const;
@@ -183,6 +185,7 @@ private:
     [[nodiscard]] const WorkArea& work_area_for_alias(const std::string& alias) const;
     [[nodiscard]] Value evaluate_expression(const Program& program) const;
     [[nodiscard]] bool filter_matches(const WorkArea& area) const;
+    [[nodiscard]] bool record_visible(const WorkArea& area) const;
     void position_first_visible(WorkArea& area);
     void skip_visible(WorkArea& area, std::ptrdiff_t count);
 };

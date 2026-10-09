@@ -547,6 +547,18 @@ Program Compiler::compile(std::string_view source) const {
                 continue;
             }
 
+            if (equal_ci(line, "SET DELETED ON")) {
+                program.code.push_back(
+                    {OpCode::SetDeletedVisibility, Value(true)});
+                continue;
+            }
+
+            if (equal_ci(line, "SET DELETED OFF")) {
+                program.code.push_back(
+                    {OpCode::SetDeletedVisibility, Value(false)});
+                continue;
+            }
+
             if (starts_with_ci(line, "SEEK ")) {
                 expression_compiler.emit(line.substr(5));
                 program.code.push_back({OpCode::Seek});
@@ -785,8 +797,7 @@ Value DbfTable::field(const std::string& name) const {
 
     if (field_info.type == 'L') {
         const char c = raw.empty() ? 'F' : static_cast<char>(std::toupper(raw.front()));
-        return Value(c == 'T' || c == 'Y');
-    }
+        return Value(c == 'T' || c == 'Y');    }
 
     return Value(rtrim_spaces(raw));
 }
@@ -1204,6 +1215,11 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             ++ip;
             break;
         }
+
+        case OpCode::SetDeletedVisibility:
+            hide_deleted_ = instruction.operand.as_logical();
+            ++ip;
+            break;
 
         case OpCode::GoTop: {
             WorkArea& area = active_work_area();
@@ -1657,14 +1673,22 @@ bool Vm::filter_matches(const WorkArea& area) const {
     return evaluate_expression(*area.filter).as_logical();
 }
 
+bool Vm::record_visible(const WorkArea& area) const {
+    if (!area.table || area.table->bof() || area.table->eof()) {
+        return false;
+    }
+
+    if (hide_deleted_ && area.table->deleted()) {
+        return false;
+    }
+
+    return filter_matches(area);
+}
+
 void Vm::position_first_visible(WorkArea& area) {
     area.table->go_top();
 
-    if (!area.filter) {
-        return;
-    }
-
-    while (!area.table->eof() && !filter_matches(area)) {
+    while (!area.table->eof() && !record_visible(area)) {
         area.table->skip(1);
     }
 }
@@ -1674,7 +1698,7 @@ void Vm::skip_visible(WorkArea& area, std::ptrdiff_t count) {
         return;
     }
 
-    if (!area.filter) {
+    if (!area.filter && !hide_deleted_) {
         area.table->skip(count);
         return;
     }
@@ -1687,7 +1711,7 @@ void Vm::skip_visible(WorkArea& area, std::ptrdiff_t count) {
         area.table->skip(direction);
 
         while (!area.table->bof() && !area.table->eof() &&
-               !filter_matches(area)) {
+               !record_visible(area)) {
             area.table->skip(direction);
         }
 

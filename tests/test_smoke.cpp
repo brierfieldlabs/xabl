@@ -203,6 +203,28 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        const xabl::Program deleted_visibility_program =
+            compiler.compile(read_text(fixtures / "legacy-set-deleted.prg"));
+
+        std::ostringstream deleted_visibility_output;
+        xabl::Vm deleted_visibility_vm(deleted_visibility_output);
+        deleted_visibility_vm.run(deleted_visibility_program, fixtures);
+
+        const std::string expected_deleted_visibility =
+            "Alice\n"
+            "Charlie\n"
+            "Alice\n"
+            "Bob\n"
+            ".T.\n"
+            "Bob\n";
+
+        if (deleted_visibility_output.str() != expected_deleted_visibility) {
+            std::cerr << "unexpected SET DELETED output\nExpected:\n"
+                      << expected_deleted_visibility << "Actual:\n"
+                      << deleted_visibility_output.str();
+            return 1;
+        }
+
         std::cout << "XABL smoke test passed\n";
         return 0;
     } catch (const std::exception& ex) {
