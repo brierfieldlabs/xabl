@@ -12,6 +12,10 @@ independent original-product reference files are still outstanding.
   `?` prints a blank line, while `?expression` works without a space.
   Semicolon line continuation remains unimplemented.
 
+- Basic character `>`, `<`, `>=`, `<=` relational comparisons
+  now use unsigned bytewise lexical ordering. The traditional `#`
+  not-equal spelling is recognised. Mixed numeric/character relational
+  values raise an explicit type mismatch.
 - The character `+` and `-` operators concatenate strings.
   Plus preserves both operands verbatim; minus moves trailing ASCII
   spaces from the left operand behind the concatenated right operand.

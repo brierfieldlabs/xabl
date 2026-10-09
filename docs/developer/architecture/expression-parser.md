@@ -30,6 +30,9 @@ with doubled-quote escaping, `.T.`/`.F.` and TRUE/FALSE.
 Built-ins with zero arguments: EOF(), BOF(), FOUND(), RECNO(), RECCOUNT(),
 DELETED(). Variable and field references become `LoadName` bytecode.
 
+The lexer recognises the historic # inequality spelling as well as
+!= and <>. Ordered character comparisons use bytewise collation through
+the shared VM/filter helper; full legacy codepages remain unfinished.
 The lexer now also recognises comma as a function-argument separator.
 LEFT/RIGHT take exactly two arguments; SUBSTR takes two or three.
 All arguments are full expressions, including nested calls.
