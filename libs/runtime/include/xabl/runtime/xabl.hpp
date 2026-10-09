@@ -98,6 +98,10 @@ enum class OpCode {
     CallReplicate,
     CallVal,
     CallStr,
+    CallAbs,
+    CallInt,
+    CallMin,
+    CallMax,
     Halt
 };
 

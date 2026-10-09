@@ -119,3 +119,11 @@ asterisks when a valid width is too small for the number. Invalid formatting
 width/precision is refused separately. Both functions run in ordinary and
 filter expressions. Current runtime safety limits are 1 MiB width and 18
 decimal places; these are not claimed as historical dBASE III PLUS limits.
+
+## Basic numeric functions
+
+ABS() calculates absolute value, INT() removes fractional digits toward
+zero, and MIN()/MAX() compare two numeric arguments. All require finite
+numeric operands. They work inside SET FILTER as well as normal expressions.
+ROUND() remains pending explicit per-version tests for documented historical
+dBASE III PLUS rounding defects.
