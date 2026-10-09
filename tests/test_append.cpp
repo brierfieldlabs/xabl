@@ -192,6 +192,77 @@ int main(int argc, char** argv) {
                 "SET EXACT was not applied to active work-area filters: " +
                     exact_output.str());
 
+        // A valid zero-record DBF has only a one-byte field terminator
+        // after its descriptors. The loader must not demand 32 more bytes.
+        const std::size_t header_size =
+            static_cast<unsigned char>(original[8]) |
+            (static_cast<unsigned char>(original[9]) << 8);
+        std::string empty_bytes = original.substr(0, header_size);
+        for (int index = 4; index < 8; ++index) empty_bytes[index] = '\0';
+        empty_bytes.push_back(static_cast<char>(0x1A));
+        const fs::path empty_path = temp.path / "empty.dbf";
+        { std::ofstream file(empty_path, std::ios::binary);
+          file.write(empty_bytes.data(), static_cast<std::streamsize>(empty_bytes.size())); }
+        xabl::DbfTable empty(empty_path);
+        require(empty.reccount() == 0, "empty DBF record count wrong");
+        empty.go_top();
+        require(empty.eof(), "zero-record DBF must be at EOF");
+        empty.append_blank();
+        require(empty.reccount() == 1 && empty.recno() == 1,
+                "APPEND to zero-record DBF failed");
+        empty.replace("NAME", xabl::Value(std::string("First")));
+        xabl::DbfTable reloaded_empty(empty_path);
+        reloaded_empty.go_top();
+        require(reloaded_empty.field("NAME").as_string() == "First",
+                "first record in initially empty DBF not persisted");
+
+        // Corrupt headers must fail safely before allocating the declared
+        // record count or attempting to read past the actual file.
+        const fs::path bad_count_path = temp.path / "hugecount.dbf";
+        std::string bad_count = original;
+        bad_count[4] = static_cast<char>(0xFF);
+        bad_count[5] = static_cast<char>(0xFF);
+        bad_count[6] = static_cast<char>(0xFF);
+        bad_count[7] = static_cast<char>(0x7F);
+        { std::ofstream file(bad_count_path, std::ios::binary);
+          file.write(bad_count.data(), static_cast<std::streamsize>(bad_count.size())); }
+        bool rejected = false;
+        try { (void)xabl::DbfTable(bad_count_path); }
+        catch (const std::runtime_error&) { rejected = true; }
+        require(rejected, "corrupt DBF record count was accepted");
+
+        const fs::path missing_terminator = temp.path / "noterm.dbf";
+        std::string bad_header = original;
+        bad_header[header_size - 1] = 'X';
+        { std::ofstream file(missing_terminator, std::ios::binary);
+          file.write(bad_header.data(),
+                     static_cast<std::streamsize>(bad_header.size())); }
+        rejected = false;
+        try { (void)xabl::DbfTable(missing_terminator); }
+        catch (const std::runtime_error&) { rejected = true; }
+        require(rejected, "missing DBF field terminator was accepted");
+
+        // An index can use any expression, not necessarily the name of the
+        // replaced field. Until indexed writes are supported REPLACE must
+        // never silently make the NDX stale.
+        fs::copy_file(fixtures / "customers.dbf", temp.path / "indexedit.dbf");
+        fs::copy_file(fixtures / "customers.ndx", temp.path / "indexedit.ndx");
+        const std::string edit_original = content(temp.path / "indexedit.dbf");
+        xabl::Vm edit_vm(output);
+        expect_runtime_error(compiler, edit_vm,
+                             "USE indexedit\nSET INDEX TO indexedit\n"
+                             "REPLACE NAME WITH 'BAD'", temp.path);
+        require(content(temp.path / "indexedit.dbf") == edit_original,
+                "REPLACE modified indexed DBF despite rejection");
+        edit_vm.run(compiler.compile("SET INDEX TO\nREPLACE NAME WITH 'Good'"),
+                    temp.path);
+        xabl::DbfTable verified_edit(temp.path / "indexedit.dbf");
+        verified_edit.go_top();
+        require(verified_edit.field("NAME").as_string() == "Good",
+                "REPLACE failed after index closed");
+        require(content(fixtures / "customers.dbf") == original,
+                "DBF integrity tests modified the original fixture");
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

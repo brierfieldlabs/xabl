@@ -267,6 +267,13 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             if (!area.table) {
                 throw std::runtime_error("REPLACE with no table open");
             }
+            // An NDX expression can reference any field. Until NDX writes
+            // are supported, never persist a record that could invalidate
+            // its index, even when the field seems unrelated to the key.
+            if (area.index) {
+                throw std::runtime_error(
+                    "REPLACE requires closing NDX index until index writes are supported");
+            }
             area.table->replace(instruction.text, pop());
             ++ip;
             break;
