@@ -489,6 +489,20 @@ int main(int argc, char** argv) {
         require(bad_skip_output.str() == "1\n",
                 "invalid SKIP changed the record cursor");
 
+        // GO n must never cast a non-finite or too-large numeric value
+        // into size_t. Rejection leaves the current position unchanged.
+        std::ostringstream go_output;
+        xabl::Vm go_vm(go_output);
+        go_vm.run(compiler.compile("USE wide-skip\nGO TOP"), temp.path);
+        expect_runtime_error(compiler, go_vm, "GO 1e100", temp.path);
+        expect_runtime_error(compiler, go_vm, "GO -1", temp.path);
+        go_vm.run(compiler.compile("? RECNO()\nGO 1e18\n? EOF()\n"
+                                   "GO 2\n? RECNO()\nGO 0\n? BOF()"),
+                  temp.path);
+        require(go_output.str() == "1\n.T.\n2\n.T.\n",
+                "GO overflow bounds or cursor recovery failed: " +
+                    go_output.str());
+
         // Fixed-width C fields retain trailing DBF padding in expressions.
         // A user explicitly requests TRIM() when the field's actual text
         // length or an unpadded output is wanted.
