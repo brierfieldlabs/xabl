@@ -112,6 +112,42 @@ int main(int argc, char** argv) {
         try { (void)xabl::NdxIndex(temp.path / "cycle.ndx").ordered_records(); }
         catch (const std::runtime_error&) { rejected = true; }
         check(rejected, "cyclic NDX was accepted");
+        rejected = false;
+        try {
+            (void)xabl::NdxIndex(temp.path / "cycle.ndx")
+                .seek(xabl::Value(std::string("Alice")));
+        } catch (const std::runtime_error&) { rejected = true; }
+        check(rejected, "cyclic NDX SEEK was accepted");
+
+        // A corrupt record pointer must never make FOUND() true while the
+        // table cursor points to EOF, and an impossible page key count must
+        // be rejected before a byte-offset calculation can overflow.
+        std::string bad_record = load(temp.path / "shuffled.ndx");
+        const auto first_record_pointer = std::size_t(512 + 4 + 4);
+        bad_record[first_record_pointer] = static_cast<char>(0xFF);
+        bad_record[first_record_pointer + 1] = static_cast<char>(0xFF);
+        bad_record[first_record_pointer + 2] = static_cast<char>(0x7F);
+        bad_record[first_record_pointer + 3] = 0;
+        save(temp.path / "badpointer.ndx", bad_record);
+        rejected = false;
+        try {
+            xabl::Vm invalid_vm(output);
+            invalid_vm.run(compiler.compile(
+                "USE shuffled\nSET INDEX TO badpointer\nSEEK 'Alice'"), temp.path);
+        } catch (const std::runtime_error&) { rejected = true; }
+        check(rejected, "out-of-range NDX SEEK record pointer was accepted");
+
+        std::string bad_count = load(temp.path / "shuffled.ndx");
+        for (std::size_t i = 512; i < 516; ++i) {
+            bad_count[i] = static_cast<char>(0xFF);
+        }
+        save(temp.path / "badcount.ndx", bad_count);
+        rejected = false;
+        try {
+            (void)xabl::NdxIndex(temp.path / "badcount.ndx")
+                .seek(xabl::Value(std::string("Alice")));
+        } catch (const std::runtime_error&) { rejected = true; }
+        check(rejected, "absurd NDX key count was accepted");
 
         std::cout << "NDX ordered navigation tests passed\n";
         return 0;

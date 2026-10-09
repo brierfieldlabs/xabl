@@ -232,6 +232,9 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             }
 
             const std::size_t record_number = area.index->seek(pop());
+            if (record_number > area.table->reccount()) {
+                throw std::runtime_error("NDX SEEK references an invalid DBF record");
+            }
             area.found = record_number != 0;
             area.table->go_record(record_number);
             ++ip;

@@ -36,6 +36,8 @@ independent original-product reference files are still outstanding.
   `REPLACE` refuse a work area with an active NDX index to avoid silently
   stale key expressions and index records.
   Indexed navigation is read-only; there is no NDX write maintenance yet.
+  NDX SEEK and ordered traversal both validate physical page references,
+  key counts and out-of-range records, rejecting corrupt files.
 - String ordering, collations, locale/code-page handling and later-dialect
   `==` differences require separate compatibility work.
 - The DBF writer is single-writer only. There is no cross-process locking,
