@@ -797,7 +797,6 @@ std::size_t NdxIndex::seek(const Value& key) const {
             page_number = next_page;
             continue;
         }
-
         const std::size_t tail_offset =
             4 + static_cast<std::size_t>(count) * key_record_length_;
         if (tail_offset + 4 <= page.size()) {
@@ -998,3 +997,133 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             }
             stack_.push_back(Value(lhs.as_number() / rhs.as_number()));
             ++ip;
+            break;
+        }
+
+        case OpCode::Greater: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_number() > rhs.as_number()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Less: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+            stack_.push_back(Value(lhs.as_number() < rhs.as_number()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::Equal: {
+            const Value rhs = pop();
+            const Value lhs = pop();
+
+            if (std::holds_alternative<std::string>(lhs.storage()) ||
+                std::holds_alternative<std::string>(rhs.storage())) {
+                stack_.push_back(Value(lhs.as_string() == rhs.as_string()));
+            } else {
+                stack_.push_back(Value(
+                    std::fabs(lhs.as_number() - rhs.as_number()) < 1e-12));
+            }
+            ++ip;
+            break;
+        }
+
+        case OpCode::Jump:
+            ip = instruction.target;
+            break;
+
+        case OpCode::JumpIfFalse:
+            ip = pop().as_logical() ? ip + 1 : instruction.target;
+            break;
+
+        case OpCode::CallEof: {
+            const WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("EOF() with no table open");
+            }
+            stack_.push_back(Value(area.table->eof()));
+            ++ip;
+            break;
+        }
+
+        case OpCode::CallFound:
+            stack_.push_back(Value(active_work_area().found));
+            ++ip;
+            break;
+
+        case OpCode::Halt:
+            return;
+        }
+    }
+}
+
+const std::unordered_map<std::string, Value>& Vm::variables() const noexcept {
+    return variables_;
+}
+
+Value Vm::pop() {
+    if (stack_.empty()) {
+        throw std::runtime_error("VM stack underflow");
+    }
+
+    Value value = std::move(stack_.back());
+    stack_.pop_back();
+    return value;
+}
+
+Vm::WorkArea& Vm::active_work_area() {
+    return work_areas_[active_area_];
+}
+
+const Vm::WorkArea& Vm::active_work_area() const {
+    const auto it = work_areas_.find(active_area_);
+    if (it == work_areas_.end()) {
+        throw std::runtime_error(
+            "active work area " + std::to_string(active_area_) + " is not initialised");
+    }
+    return it->second;
+}
+
+const Vm::WorkArea& Vm::work_area_for_alias(const std::string& alias) const {
+    const std::string wanted = upper(alias);
+    for (const auto& [number, area] : work_areas_) {
+        (void)number;
+        if (!area.alias.empty() && upper(area.alias) == wanted) {
+            return area;
+        }
+    }
+
+    throw std::runtime_error("unknown work-area alias: " + alias);
+}
+
+Value Vm::load_name(const std::string& name) const {
+    const std::string folded = upper(name);
+
+    const auto variable = variables_.find(folded);
+    if (variable != variables_.end()) {
+        return variable->second;
+    }
+
+    const auto alias_separator = folded.find("->");
+    if (alias_separator != std::string::npos) {
+        const std::string alias = trim(folded.substr(0, alias_separator));
+        const std::string field = trim(folded.substr(alias_separator + 2));
+        const WorkArea& area = work_area_for_alias(alias);
+        if (!area.table) {
+            throw std::runtime_error("alias has no table open: " + alias);
+        }
+        return area.table->field(field);
+    }
+
+    const WorkArea& area = active_work_area();
+    if (area.table) {
+        return area.table->field(folded);
+    }
+
+    throw std::runtime_error("unknown name: " + name);
+}
+
+} // namespace xabl
