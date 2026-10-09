@@ -30,6 +30,10 @@ independent original-product reference files are still outstanding.
   for one-based substring search. Nested expressions and active filters
   share byte-oriented results. ASCII case mapping is implemented;
   original DOS codepage mapping remains pending.
+- `SPACE(n)` generates `n` ASCII spaces and `REPLICATE(text,n)`
+  repeats a character expression `n` times. Both validate finite
+  numeric counts and apply a documented 1 MiB implementation safety cap.
+  This limit is not asserted to be the historical interpreter's limit.
 
 - `SET EXACT ON/OFF`: global character equality mode; OFF (default)
   compares the left string against the right prefix, ON compares after

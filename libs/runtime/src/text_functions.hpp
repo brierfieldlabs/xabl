@@ -112,4 +112,45 @@ inline Value apply_at_function(const Value& needle, const Value& haystack) {
                      : static_cast<double>(offset + 1));
 }
 
+// Limit generated buffers independently from the historical dBASE III
+// memory model. This is a defensive runtime allocation ceiling, not a
+// declaration of the original dialect's maximum string length.
+constexpr std::size_t generated_text_limit = 1024 * 1024;
+
+inline std::size_t checked_repeat_count(const Value& requested) {
+    const auto* number = std::get_if<double>(&requested.storage());
+    if (!number || !std::isfinite(*number)) {
+        throw std::runtime_error("generated string count must be a finite number");
+    }
+    if (*number <= 0.0) return 0;
+    if (*number > static_cast<double>(generated_text_limit)) {
+        throw std::runtime_error("generated string exceeds safety limit");
+    }
+    return static_cast<std::size_t>(std::trunc(*number));
+}
+
+inline Value apply_space_function(const Value& requested) {
+    const auto count = checked_repeat_count(requested);
+    return Value(std::string(count, ' '));
+}
+
+inline Value apply_replicate_function(const Value& string_arg,
+                                      const Value& requested) {
+    const auto* source = std::get_if<std::string>(&string_arg.storage());
+    if (!source) {
+        throw std::runtime_error("REPLICATE requires a character argument");
+    }
+    const std::size_t count = checked_repeat_count(requested);
+    if (source->empty() || count == 0) return Value(std::string{});
+    if (source->size() > generated_text_limit / count) {
+        throw std::runtime_error("REPLICATE exceeds safety limit");
+    }
+    std::string result;
+    result.reserve(source->size() * count);
+    for (std::size_t i = 0; i < count; ++i) {
+        result.append(*source);
+    }
+    return Value(std::move(result));
+}
+
 } // namespace xabl
