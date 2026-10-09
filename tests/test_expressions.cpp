@@ -48,7 +48,18 @@ int main() {
         {"SET EXACT ON\n? 'ABC' = 'ABC '", ".T.\n"},
         {"SET EXACT ON\n? 'ABC' == 'ABC '", ".F.\n"},
         {"SET EXACT ON\n? 'ABC' <> 'ABC '", ".F.\n"},
-        {"SET EXACT ON\nSET EXACT OFF\n? 'ABC' = 'AB'", ".T.\n"}
+        {"SET EXACT ON\nSET EXACT OFF\n? 'ABC' = 'AB'", ".T.\n"},
+        {"? LEN('A B')", "3\n"},
+        {"? LEN('A   ')", "4\n"},
+        {"? UPPER('aBc')", "ABC\n"},
+        {"? LOWER('AbC')", "abc\n"},
+        {"? TRIM('trailing   ')", "trailing\n"},
+        {"? RTRIM('trailing   ')", "trailing\n"},
+        {"? LTRIM('   leading')", "leading\n"},
+        {"? LEN(UPPER('ab'))", "2\n"},
+        {"? UPPER(LTRIM('   hello'))", "HELLO\n"},
+        {"? TRIM(' padded   ') == ' padded'", ".T.\n"},
+        {"? LEN(TRIM('   '))", "0\n"}
     };
     try {
         xabl::Compiler compiler;
@@ -68,13 +79,26 @@ int main() {
         for (const char* invalid : {
                  "? (2 + 3", "? 2 +", "? \"unterminated",
                  "? 1 2", "? UNKNOWN(1)", "? 1 / / 2",
-                 "? EOF(1)", "? .BAD.", "? 5 ==", "? ()"}) {
+                 "? EOF(1)", "? .BAD.", "? 5 ==", "? ()",
+                 "? LEN()", "? UPPER('a', 'b')", "? TRIM('a', 'b')"}) {
             try {
                 (void)compiler.compile(invalid);
                 std::cerr << "Expression unexpectedly compiled: " << invalid << '\n';
                 return 1;
             } catch (const std::runtime_error&) {
                 // Expected diagnostics, including source line number.
+            }
+        }
+        for (const char* invalid_type : {
+                 "? LEN(123)", "? UPPER(.T.)", "? TRIM(4)"}) {
+            std::ostringstream output;
+            xabl::Vm vm(output);
+            try {
+                vm.run(compiler.compile(invalid_type), ".");
+                std::cerr << "type error unexpectedly accepted: " << invalid_type << '\n';
+                return 1;
+            } catch (const std::runtime_error&) {
+                // Legacy functions require character expressions.
             }
         }
     } catch (const std::exception& error) {

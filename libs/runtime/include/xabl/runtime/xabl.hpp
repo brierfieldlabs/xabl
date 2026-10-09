@@ -85,6 +85,11 @@ enum class OpCode {
     CallRecno,
     CallReccount,
     CallDeleted,
+    CallLen,
+    CallUpper,
+    CallLower,
+    CallTrim,
+    CallLTrim,
     Halt
 };
 

@@ -263,6 +263,20 @@ int main(int argc, char** argv) {
         require(content(fixtures / "customers.dbf") == original,
                 "DBF integrity tests modified the original fixture");
 
+        // The same character functions must execute in filter bytecode,
+        // including nested calls and a nontrivial expression result.
+        std::ostringstream text_filter_output;
+        xabl::Vm text_filter_vm(text_filter_output);
+        text_filter_vm.run(compiler.compile(
+            "USE branch\n"
+            "SET FILTER TO UPPER(NAME) = 'BOB'\n"
+            "GO TOP\n? NAME\n"
+            "SET FILTER TO LEN(UPPER(NAME)) > 5\n"
+            "GO TOP\n? NAME\n"), temp.path);
+        require(text_filter_output.str() == "Bob\nCharlie\n",
+                "character functions in filters failed: " +
+                    text_filter_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

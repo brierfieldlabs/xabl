@@ -228,18 +228,47 @@ private:
                 return;
             }
             advance();
-            if (token_.kind != Kind::RParen) {
-                fail("only zero-argument legacy functions are implemented");
+            // Status functions take no parameters. Character functions use
+            // exactly one complete expression, which may itself be a call.
+            const auto zero_arg = [&]() -> OpCode {
+                if (current.text == "EOF") return OpCode::CallEof;
+                if (current.text == "BOF") return OpCode::CallBof;
+                if (current.text == "FOUND") return OpCode::CallFound;
+                if (current.text == "RECNO") return OpCode::CallRecno;
+                if (current.text == "RECCOUNT") return OpCode::CallReccount;
+                if (current.text == "DELETED") return OpCode::CallDeleted;
+                return OpCode::Halt;
+            };
+            if (const auto opcode = zero_arg(); opcode != OpCode::Halt) {
+                if (token_.kind != Kind::RParen) {
+                    fail("zero-argument function takes no parameters");
+                }
+                advance();
+                emit(opcode);
+                return;
             }
-            advance();
-            if (current.text == "EOF") emit(OpCode::CallEof);
-            else if (current.text == "BOF") emit(OpCode::CallBof);
-            else if (current.text == "FOUND") emit(OpCode::CallFound);
-            else if (current.text == "RECNO") emit(OpCode::CallRecno);
-            else if (current.text == "RECCOUNT") emit(OpCode::CallReccount);
-            else if (current.text == "DELETED") emit(OpCode::CallDeleted);
-            else throw std::runtime_error("unsupported function: " + current.text);
-            return;
+            const auto one_arg = [&]() -> OpCode {
+                if (current.text == "LEN") return OpCode::CallLen;
+                if (current.text == "UPPER") return OpCode::CallUpper;
+                if (current.text == "LOWER") return OpCode::CallLower;
+                if (current.text == "TRIM" || current.text == "RTRIM")
+                    return OpCode::CallTrim;
+                if (current.text == "LTRIM") return OpCode::CallLTrim;
+                return OpCode::Halt;
+            };
+            if (const auto opcode = one_arg(); opcode != OpCode::Halt) {
+                if (token_.kind == Kind::RParen) {
+                    fail("missing character-function argument");
+                }
+                expression(1);
+                if (token_.kind != Kind::RParen) {
+                    fail("character function expects one argument");
+                }
+                advance();
+                emit(opcode);
+                return;
+            }
+            throw std::runtime_error("unsupported function: " + current.text);
         }
         case Kind::LParen:
             expression(1);
