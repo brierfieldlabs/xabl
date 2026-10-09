@@ -54,14 +54,22 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             char* end = nullptr;
             const long numeric = std::strtol(selector.c_str(), &end, 10);
 
-            if (end != nullptr && *end == '\0') {
-                if (numeric <= 0) {
-                    throw std::runtime_error("SELECT requires a positive work area");
+            const std::string wanted = upper(selector);
+            // The dBASE III PLUS profile exposes exactly ten work areas.
+            // Single letters A through J are stable numeric aliases for
+            // 1 through 10, independent of the open file's chosen alias.
+            const bool area_letter = wanted.size() == 1 &&
+                                     wanted.front() >= 'A' && wanted.front() <= 'J';
+            if ((end != nullptr && *end == '\0') || area_letter) {
+                const long chosen = area_letter
+                    ? static_cast<long>(wanted.front() - 'A' + 1)
+                    : numeric;
+                if (chosen < 1 || chosen > 10) {
+                    throw std::runtime_error("SELECT work area must be 1 through 10");
                 }
-                active_area_ = static_cast<int>(numeric);
+                active_area_ = static_cast<int>(chosen);
                 work_areas_.try_emplace(active_area_);
             } else {
-                const std::string wanted = upper(selector);
                 bool matched = false;
                 for (const auto& [number, area] : work_areas_) {
                     if (!area.alias.empty() && upper(area.alias) == wanted) {
