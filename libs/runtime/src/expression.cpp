@@ -258,6 +258,8 @@ private:
                 if (current.text == "LTRIM") return OpCode::CallLTrim;
                 if (current.text == "SPACE") return OpCode::CallSpace;
                 if (current.text == "VAL") return OpCode::CallVal;
+                if (current.text == "ABS") return OpCode::CallAbs;
+                if (current.text == "INT") return OpCode::CallInt;
                 return OpCode::Halt;
             };
             if (const auto opcode = one_arg(); opcode != OpCode::Halt) {
@@ -292,13 +294,15 @@ private:
             }
             // Search and substring functions each accept two full
             // expressions; only SUBSTR accepts a third argument.
-            OpCode slice_op = OpCode::Halt;
-            if (current.text == "LEFT") slice_op = OpCode::CallLeft;
-            if (current.text == "RIGHT") slice_op = OpCode::CallRight;
-            if (current.text == "SUBSTR") slice_op = OpCode::CallSubstr;
-            if (current.text == "AT") slice_op = OpCode::CallAt;
-            if (current.text == "REPLICATE") slice_op = OpCode::CallReplicate;
-            if (slice_op != OpCode::Halt) {
+            OpCode multi_arg_op = OpCode::Halt;
+            if (current.text == "LEFT") multi_arg_op = OpCode::CallLeft;
+            if (current.text == "RIGHT") multi_arg_op = OpCode::CallRight;
+            if (current.text == "SUBSTR") multi_arg_op = OpCode::CallSubstr;
+            if (current.text == "AT") multi_arg_op = OpCode::CallAt;
+            if (current.text == "REPLICATE") multi_arg_op = OpCode::CallReplicate;
+            if (current.text == "MIN") multi_arg_op = OpCode::CallMin;
+            if (current.text == "MAX") multi_arg_op = OpCode::CallMax;
+            if (multi_arg_op != OpCode::Halt) {
                 if (token_.kind == Kind::RParen) fail("missing string argument");
                 expression(1);
                 if (token_.kind != Kind::Comma) {
@@ -308,7 +312,7 @@ private:
                 expression(1);
                 std::size_t argument_count = 2;
                 if (token_.kind == Kind::Comma &&
-                    slice_op == OpCode::CallSubstr) {
+                    multi_arg_op == OpCode::CallSubstr) {
                     advance();
                     expression(1);
                     argument_count = 3;
@@ -317,7 +321,7 @@ private:
                     fail("invalid string slice function argument count");
                 }
                 advance();
-                Instruction instruction{slice_op};
+                Instruction instruction{multi_arg_op};
                 instruction.target = argument_count;
                 program_.code.push_back(std::move(instruction));
                 return;

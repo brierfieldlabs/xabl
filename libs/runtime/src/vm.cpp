@@ -356,6 +356,23 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::CallAbs:
+        case OpCode::CallInt:
+            stack_.push_back(apply_unary_numeric_function(
+                instruction.opcode, pop()));
+            ++ip;
+            break;
+
+        case OpCode::CallMin:
+        case OpCode::CallMax: {
+            const Value right = pop();
+            const Value left = pop();
+            stack_.push_back(apply_minmax_function(
+                instruction.opcode, left, right));
+            ++ip;
+            break;
+        }
+
         case OpCode::Print:
             output_ << pop().as_string() << '\n';
             ++ip;
@@ -619,6 +636,21 @@ Value Vm::evaluate_expression(const Program& program) const {
             values.push_back(apply_str_function(
                 number, instruction.target >= 2 ? &width : nullptr,
                 instruction.target == 3 ? &decimals : nullptr));
+            break;
+        }
+
+        case OpCode::CallAbs:
+        case OpCode::CallInt:
+            values.push_back(apply_unary_numeric_function(
+                instruction.opcode, pop_value()));
+            break;
+
+        case OpCode::CallMin:
+        case OpCode::CallMax: {
+            const Value right = pop_value();
+            const Value left = pop_value();
+            values.push_back(apply_minmax_function(
+                instruction.opcode, left, right));
             break;
         }
 

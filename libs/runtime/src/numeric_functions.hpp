@@ -86,4 +86,34 @@ inline Value apply_str_function(const Value& number_arg,
     return Value(std::string(width - digits.size(), ' ') + digits);
 }
 
+// This subset intentionally requires numeric storage (not strings that
+// merely look numeric) for arithmetic functions.
+inline double finite_numeric_argument(const Value& argument, const char* name) {
+    const auto* number = std::get_if<double>(&argument.storage());
+    if (!number || !std::isfinite(*number)) {
+        throw std::runtime_error(std::string(name) +
+                                 " requires a finite numeric argument");
+    }
+    return *number;
+}
+
+inline Value apply_unary_numeric_function(OpCode opcode, const Value& argument) {
+    const double number = finite_numeric_argument(argument, "numeric function");
+    if (opcode == OpCode::CallAbs) return Value(std::fabs(number));
+    if (opcode == OpCode::CallInt) {
+        const double integer = std::trunc(number);
+        return Value(integer == 0.0 ? 0.0 : integer);
+    }
+    throw std::runtime_error("unsupported one-argument numeric function");
+}
+
+inline Value apply_minmax_function(OpCode opcode, const Value& left,
+                                    const Value& right) {
+    const double lhs = finite_numeric_argument(left, "MIN/MAX");
+    const double rhs = finite_numeric_argument(right, "MIN/MAX");
+    if (opcode == OpCode::CallMin) return Value(std::min(lhs, rhs));
+    if (opcode == OpCode::CallMax) return Value(std::max(lhs, rhs));
+    throw std::runtime_error("unsupported two-argument numeric function");
+}
+
 } // namespace xabl

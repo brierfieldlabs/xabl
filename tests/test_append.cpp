@@ -528,6 +528,19 @@ int main(int argc, char** argv) {
         require(conversion_output.str() == "Alice\nCharlie\nCharlie\n",
                 "STR/VAL in filters failed: " + conversion_output.str());
 
+        std::ostringstream numeric_output;
+        xabl::Vm numeric_vm(numeric_output);
+        numeric_vm.run(compiler.compile(
+            "USE branch\n"
+            "SET FILTER TO MAX(BALANCE,90) >= 180\n"
+            "GO TOP\n? TRIM(NAME)\n"
+            "SET FILTER TO ABS(BALANCE - 100) > 90\n"
+            "GO TOP\n? TRIM(NAME)\n"
+            "SET FILTER TO INT(BALANCE) == 125\n"
+            "GO TOP\n? TRIM(NAME)\n"), temp.path);
+        require(numeric_output.str() == "Charlie\nCharlie\nAlice\n",
+                "numeric function filtering failed: " + numeric_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

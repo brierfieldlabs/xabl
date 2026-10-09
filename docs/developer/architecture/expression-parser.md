@@ -63,3 +63,7 @@ STR now takes one to three nested expression arguments, recording the
 actual arity in its bytecode instruction. VAL is exactly one-argument.
 The full VM and embedded DBF-filter evaluator share numeric conversion
 logic in numeric_functions.hpp.
+
+ABS and INT emit one-argument numeric bytecodes; MIN and MAX emit
+two-argument numeric bytecodes. Main VM execution and SET FILTER use the
+same numeric_functions.hpp helpers with explicit argument type checks.
