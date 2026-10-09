@@ -23,6 +23,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="xabl-tui-pty-") as directory:
         source = Path(directory) / "program.prg"
         source.write_bytes(b"? 2 + 3\n")
+        faulty = Path(directory) / "bad.prg"
         pid, fd = pty.fork()
         if pid == 0:
             os.environ["TERM"] = "xterm-256color"
@@ -67,6 +68,16 @@ def main() -> int:
             wait_for(b"Opened ")
             # The completed editor redraw (including EDITOR) may arrive
             # in the same pty read as the 'Opened' status text.
+            goto_mark = len(transcript)
+            send(b"\x07")  # Ctrl+G: go to a source line
+            wait_for(b"Go to line", since=goto_mark)
+            send(b"2\r")
+            wait_for(b"Line 2")
+            goto_mark = len(transcript)
+            send(b"\x07")
+            wait_for(b"Go to line", since=goto_mark)
+            send(b"1\r")
+            wait_for(b"Line 1")
             # F9: compile-only. Program output should say "Compilation"
             # without executing the program or showing its result.
             send(b"\x1b[20~")
@@ -83,6 +94,20 @@ def main() -> int:
             send(b"* harmless note\n")
             send(b"\x13")
             wait_for(b"Saved ")
+            faulty.write_bytes(b"? 2 + 3\nUNKNOWN COMMAND\n")
+            # Load an invalid program to verify F9 stays compile-only and
+            # F8 jumps from the diagnostics view to the right source line.
+            path_mark = len(transcript)
+            send(b"\x0f")  # Ctrl+O: direct open
+            wait_for(b"Open source file", since=path_mark)
+            send(os.fsencode(faulty) + b"\r")
+            wait_for(b"Opened ")
+            check_mark = len(transcript)
+            send(b"\x1b[20~")
+            wait_for(b"Error: line 2:", since=check_mark)
+            error_mark = len(transcript)
+            send(b"\x1b[19~")  # F8: jump from error output to source
+            wait_for(b"Compiler error at line 2", since=error_mark)
             send(b"\x11")
             end = time.monotonic() + 5
             exit_status = None

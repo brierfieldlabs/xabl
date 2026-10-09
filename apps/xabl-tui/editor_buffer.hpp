@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -18,6 +19,7 @@ public:
     struct Cursor {
         std::size_t row{};
         std::size_t column{};
+        bool operator==(const Cursor&) const = default;
     };
 
     EditorBuffer();
@@ -31,6 +33,8 @@ public:
     [[nodiscard]] bool dirty() const noexcept;
 
     void set_cursor(std::size_t row, std::size_t column);
+    /// Position on a 1-based source line, or leave cursor alone if invalid.
+    [[nodiscard]] bool go_to_line(std::size_t one_based_line);
     void move_left();
     void move_right();
     void move_up();
@@ -61,5 +65,10 @@ private:
     bool dirty_{false};
     std::vector<Snapshot> undo_;
 };
+
+/// Parse compiler diagnostics prefixed with "line N: ". Reject overflow
+/// and arbitrary runtime error messages without an explicit line prefix.
+[[nodiscard]] std::optional<std::size_t>
+diagnostic_source_line(std::string_view diagnostic);
 
 } // namespace xabl::tui

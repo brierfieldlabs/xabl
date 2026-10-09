@@ -10,11 +10,13 @@
 
 #include <curses.h>
 #include <algorithm>
+#include <charconv>
 #include <array>
 #include <clocale>
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -95,6 +97,7 @@ private:
     std::string message_;
     std::string output_;
     std::string last_search_;
+    std::optional<std::size_t> last_compile_error_line_;
     std::size_t scroll_row_{};
     std::size_t scroll_column_{};
     std::size_t output_scroll_{};
@@ -252,7 +255,7 @@ private:
         bar(height - 1,
             mode_ == Mode::Browser
                 ? " Arrows Move  Enter Open  Backspace Parent  Ctrl+O Path  Esc Editor"
-                : " F1 Help  F2 Files  F3 New  F4 Save  F5 Run  F6 Output  F7 Find  F9 Check  F10 Exit",
+                : " F1 Help F2 Files F3 New F4 Save F5 Run F6 Out F7 Find F8 Err F9 Check F10 Exit",
             2);
         if (mode_ == Mode::Editor) {
             curs_set(1);
@@ -273,11 +276,12 @@ private:
             " F1       Toggle this help screen\n"
             " F2       Browse source files and directories\n"
             " Ctrl+O   Open source by typing a path\n"
+            " Ctrl+G   Go to a numbered source line\n"
             " F3       New source file (asks before discarding changes)\n"
             " F4       Save source file (Ctrl+S also works)\n"
             " F5       Compile and run the source in shared XABL VM\n"
             " F6       Toggle the program output / editor screen\n"
-            " F7       Find text (Ctrl+F), F8 find next\n"
+            " F7       Find text (Ctrl+F); F8 next or error jump\n"
             " F9       Check syntax without executing any commands\n"
             " F10      Exit (Ctrl+Q also works)\n"
             " Ctrl+Z   Undo recent edit\n"
@@ -341,6 +345,7 @@ private:
         document_.load(path);
         scroll_row_ = scroll_column_ = 0;
         mode_ = Mode::Editor;
+        last_compile_error_line_.reset();
         message_ = "Opened " + path;
     }
 
@@ -385,6 +390,7 @@ private:
             mode_ = Mode::Editor;
             browser_.reset();
             scroll_row_ = scroll_column_ = 0;
+            last_compile_error_line_.reset();
             message_ = "Opened " + safe_title(selected.string());
             break;
         }
@@ -406,16 +412,49 @@ private:
         document_.clear();
         scroll_row_ = scroll_column_ = 0;
         mode_ = Mode::Editor;
+        last_compile_error_line_.reset();
         message_ = "New source file.";
+    }
+
+    void goto_prompt() {
+        const auto supplied = prompt("Go to line (number):");
+        if (supplied.empty()) return;
+        std::size_t value{};
+        const auto [end, code] = std::from_chars(supplied.data(),
+                                                 supplied.data() + supplied.size(), value);
+        if (code != std::errc{} || end != supplied.data() + supplied.size() ||
+            !document_.go_to_line(value)) {
+            message_ = "Invalid source line number.";
+            return;
+        }
+        mode_ = Mode::Editor;
+        message_ = "Line " + std::to_string(value);
+    }
+
+    void next_or_error() {
+        if (mode_ == Mode::Output && last_compile_error_line_) {
+            const auto target = *last_compile_error_line_;
+            if (document_.go_to_line(target)) {
+                mode_ = Mode::Editor;
+                message_ = "Compiler error at line " + std::to_string(target);
+            } else {
+                message_ = "Reported line is outside the current source.";
+            }
+            return;
+        }
+        search(true);
     }
 
     void compile(bool execute) {
         // Compile without invoking the shell: the same library and dialect
         // configuration as the command-line XABL runner are used.
         std::ostringstream buffer;
+        last_compile_error_line_.reset();
+        bool compiled = false;
         try {
             xabl::Compiler compiler;
             const auto program = compiler.compile(document_.text());
+            compiled = true;
             buffer << "Compilation successful.\n";
             if (execute) {
                 xabl::Vm machine(buffer);
@@ -425,13 +464,20 @@ private:
                 buffer << "\nProgram completed.\n";
             }
         } catch (const std::exception& e) {
+            if (!compiled) {
+                last_compile_error_line_ =
+                    xabl::tui::diagnostic_source_line(e.what());
+            }
             buffer << "\nError: " << e.what() << "\n";
         }
         output_ = buffer.str();
         output_scroll_ = 0;
         mode_ = Mode::Output;
-        message_ = execute ? "Program output. F6 to return." :
-                             "Syntax check. F6 to return.";
+        message_ = last_compile_error_line_
+            ? "Syntax error at line " + std::to_string(*last_compile_error_line_) +
+              ". F8 jumps there."
+            : (execute ? "Program output. F6 to return." :
+                         "Syntax check. F6 to return.");
     }
 
     void search(bool again) {
@@ -476,7 +522,8 @@ private:
             return;
         case KEY_F(7):
         case ctrl('F'): search(false); return;
-        case KEY_F(8): search(true); return;
+        case KEY_F(8): next_or_error(); return;
+        case ctrl('G'): goto_prompt(); return;
         case KEY_F(9): compile(false); return;
         case KEY_F(10):
         case ctrl('Q'):

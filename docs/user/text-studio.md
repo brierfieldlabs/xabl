@@ -36,7 +36,7 @@ control while inside the editor, restored on normal exit by curses.
 | F5 | Compile and **run** the open source |
 | F6 | Toggle output screen and editor |
 | F7 or Ctrl+F | Search forward, wrapping at end of file |
-| F8 | Find next occurrence |
+| F8 | Find next; in compiler output, jump to reported error line |\n| Ctrl+G | Go to a numbered source line (1-based) |
 | F9 | Compile only, **without running program statements** |
 | F10 or Ctrl+Q | Exit, with unsaved-changes confirmation |
 | Ctrl+Z | Undo an edit (up to 40 recent steps) |
@@ -45,6 +45,13 @@ control while inside the editor, restored on normal exit by curses.
 | Backspace / Delete | Remove character or join lines |
 | Enter / Tab | New line / insert four spaces |
 | Esc | Return from help, output or browser to editor |\n| Browser arrows / Enter | Navigate directories and open a source file |\n| Browser Backspace | Go to parent directory |
+
+Ctrl+G prompts for a one-based line number and moves the editor cursor
+there without changing the source. F9 shows compile-only diagnostics;
+if the compiler reports a line-numbered error, F8 from the output
+screen jumps to that source line. Invalid or out-of-range line
+numbers are rejected. Runtime errors without a reliable source line
+remain in the output screen without a fabricated location.
 
 F2 browses the currently opened source's directory (or current working
 directory for an untitled file). It lists folders and PRG/XABL source
@@ -97,3 +104,8 @@ throwaway arithmetic script. The test suite never opens user databases.
 Independent syntax-highlighting and file-browser suites validate the
 presentation lexer and read-only filesystem navigation model without
 requiring an interactive terminal.
+
+The headless editor tests check valid and invalid line navigation,
+including integer overflow in diagnostic strings. The terminal PTY
+test checks Ctrl+G and F8 error navigation against a throwaway invalid
+PRG without executing that invalid program.
