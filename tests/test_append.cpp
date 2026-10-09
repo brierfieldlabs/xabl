@@ -346,6 +346,19 @@ int main(int argc, char** argv) {
                 "quoted WITH in REPLACE expression parsed incorrectly: " +
                     with_output.str());
 
+        std::ostringstream replicate_filter_output;
+        xabl::Vm replicate_filter_vm(replicate_filter_output);
+        replicate_filter_vm.run(compiler.compile(
+            "USE branch\n"
+            "SET FILTER TO RIGHT(NAME,1) == REPLICATE('e',1)\n"
+            "GO TOP\n? NAME\n"
+            "SKIP\n? NAME\n"
+            "SET FILTER TO LEN(SPACE(2)) == 2\n"
+            "GO TOP\n? NAME\n"), temp.path);
+        require(replicate_filter_output.str() == "Alice\nCharlie\nAlice\n",
+                "SPACE or REPLICATE inside filter failed: " +
+                    replicate_filter_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

@@ -256,6 +256,7 @@ private:
                 if (current.text == "TRIM" || current.text == "RTRIM")
                     return OpCode::CallTrim;
                 if (current.text == "LTRIM") return OpCode::CallLTrim;
+                if (current.text == "SPACE") return OpCode::CallSpace;
                 return OpCode::Halt;
             };
             if (const auto opcode = one_arg(); opcode != OpCode::Halt) {
@@ -277,6 +278,7 @@ private:
             if (current.text == "RIGHT") slice_op = OpCode::CallRight;
             if (current.text == "SUBSTR") slice_op = OpCode::CallSubstr;
             if (current.text == "AT") slice_op = OpCode::CallAt;
+            if (current.text == "REPLICATE") slice_op = OpCode::CallReplicate;
             if (slice_op != OpCode::Halt) {
                 if (token_.kind == Kind::RParen) fail("missing string argument");
                 expression(1);

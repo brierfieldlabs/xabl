@@ -315,6 +315,19 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::CallSpace:
+            stack_.push_back(apply_space_function(pop()));
+            ++ip;
+            break;
+
+        case OpCode::CallReplicate: {
+            const Value count = pop();
+            const Value text = pop();
+            stack_.push_back(apply_replicate_function(text, count));
+            ++ip;
+            break;
+        }
+
         case OpCode::Print:
             output_ << pop().as_string() << '\n';
             ++ip;
@@ -553,6 +566,17 @@ Value Vm::evaluate_expression(const Program& program) const {
             const Value haystack = pop_value();
             const Value needle = pop_value();
             values.push_back(apply_at_function(needle, haystack));
+            break;
+        }
+
+        case OpCode::CallSpace:
+            values.push_back(apply_space_function(pop_value()));
+            break;
+
+        case OpCode::CallReplicate: {
+            const Value count = pop_value();
+            const Value text = pop_value();
+            values.push_back(apply_replicate_function(text, count));
             break;
         }
 

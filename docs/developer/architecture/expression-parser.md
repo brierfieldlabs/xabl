@@ -34,7 +34,8 @@ The lexer recognises the historic # inequality spelling as well as
 != and <>. Ordered character comparisons use bytewise collation through
 the shared VM/filter helper; full legacy codepages remain unfinished.
 The lexer now also recognises comma as a function-argument separator.
-LEFT/RIGHT/AT take exactly two arguments; SUBSTR takes two or three.
+LEFT/RIGHT/AT/REPLICATE take exactly two arguments; SUBSTR takes
+two or three; SPACE takes one numeric argument.
 All arguments are full expressions, including nested calls.
 
 Invalid characters, unclosed quotes/parentheses, junk trailing tokens,

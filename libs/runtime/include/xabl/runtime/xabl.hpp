@@ -94,6 +94,8 @@ enum class OpCode {
     CallRight,
     CallSubstr,
     CallAt,
+    CallSpace,
+    CallReplicate,
     Halt
 };
 
