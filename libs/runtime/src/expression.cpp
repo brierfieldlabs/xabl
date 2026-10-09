@@ -276,6 +276,24 @@ private:
                 emit(opcode);
                 return;
             }
+            // STUFF takes four full expressions, including nested calls.
+            if (current.text == "STUFF") {
+                for (int argument = 0; argument < 4; ++argument) {
+                    if (argument != 0) {
+                        if (token_.kind != Kind::Comma) {
+                            fail("STUFF requires exactly four arguments");
+                        }
+                        advance();
+                    }
+                    expression(1);
+                }
+                if (token_.kind != Kind::RParen) {
+                    fail("STUFF requires exactly four arguments");
+                }
+                advance();
+                emit(OpCode::CallStuff);
+                return;
+            }
             // STR takes a numeric argument and up to two formatting
             // arguments; preserve its argument count in the bytecode.
             if (current.text == "STR") {

@@ -136,3 +136,11 @@ are preserved verbatim. These functions do not translate codepages or
 provide Unicode characters. Empty ASC inputs, non-finite/wrong-typed
 codes and out-of-range CHR inputs are rejected pending exact original
 interpreter boundary tests.
+
+## String editing
+
+STUFF(target,start,quantity,replacement) performs one-based byte-oriented
+replacement and insertion. Four arguments are required, including an
+explicit replacement string. Start positions beyond the target append;
+nonpositive quantities insert without deletion. Results are bounded to
+1 MiB as a modern XABL safety restriction, not an asserted DOS limit.

@@ -71,3 +71,7 @@ same numeric_functions.hpp helpers with explicit argument type checks.
 ASC and CHR are one-argument functions with distinct bytecode operations.
 The ordinary VM and embedded DBF filter evaluator use the same
 byte-oriented character code helper in text_functions.hpp.
+
+STUFF accepts four complete, comma-separated expressions, emitting a
+dedicated four-operand bytecode operation. Runtime and filter evaluation
+use the same bounded string-editing helper.

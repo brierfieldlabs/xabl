@@ -554,6 +554,17 @@ int main(int argc, char** argv) {
         require(codes_output.str() == "Charlie\nAlice\nBob\n",
                 "ASC/CHR in filters failed: " + codes_output.str());
 
+        std::ostringstream stuff_output;
+        xabl::Vm stuff_vm(stuff_output);
+        stuff_vm.run(compiler.compile(
+            "USE branch\n"
+            "SET FILTER TO STUFF(TRIM(NAME),1,1,'X') == 'Xlice'\n"
+            "GO TOP\n? TRIM(NAME)\n"
+            "SET FILTER TO STUFF(TRIM(NAME),1,3,'C') == 'Crlie'\n"
+            "GO TOP\n? TRIM(NAME)\n"), temp.path);
+        require(stuff_output.str() == "Alice\nCharlie\n",
+                "STUFF in filters failed: " + stuff_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

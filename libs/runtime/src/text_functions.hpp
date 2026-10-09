@@ -175,4 +175,42 @@ inline Value apply_character_code_function(OpCode opcode, const Value& argument)
     throw std::runtime_error("unsupported character-code function");
 }
 
+// STUFF(target,start,quantity,replacement): one-based, byte-oriented
+// insert/replace. Clamp the position and removal count before casting a
+// double to an index, and reject oversized output before allocating.
+inline Value apply_stuff_function(const Value& target_arg,
+                                   const Value& start_arg,
+                                   const Value& quantity_arg,
+                                   const Value& replacement_arg) {
+    const auto* target = std::get_if<std::string>(&target_arg.storage());
+    const auto* replacement = std::get_if<std::string>(&replacement_arg.storage());
+    const auto* start = std::get_if<double>(&start_arg.storage());
+    const auto* quantity = std::get_if<double>(&quantity_arg.storage());
+    if (!target || !replacement || !start || !quantity ||
+        !std::isfinite(*start) || !std::isfinite(*quantity)) {
+        throw std::runtime_error(
+            "STUFF requires character, numeric, numeric, character operands");
+    }
+    const auto position = *start <= 1.0 ? std::size_t{0}
+        : *start > static_cast<double>(target->size())
+            ? target->size()
+            : static_cast<std::size_t>(std::trunc(*start)) - 1;
+    const auto available = target->size() - position;
+    const auto removed = *quantity <= 0.0 ? std::size_t{0}
+        : *quantity >= static_cast<double>(available)
+            ? available
+            : static_cast<std::size_t>(std::trunc(*quantity));
+    const auto unchanged = target->size() - removed;
+    if (unchanged > generated_text_limit ||
+        replacement->size() > generated_text_limit - unchanged) {
+        throw std::runtime_error("STUFF result exceeds safety limit");
+    }
+    std::string result;
+    result.reserve(unchanged + replacement->size());
+    result.append(*target, 0, position);
+    result.append(*replacement);
+    result.append(*target, position + removed, std::string::npos);
+    return Value(std::move(result));
+}
+
 } // namespace xabl
