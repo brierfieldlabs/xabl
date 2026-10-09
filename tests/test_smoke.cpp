@@ -193,6 +193,8 @@ int main(int argc, char** argv) {
             "word-and\n"
             "dot-or\n"
             "word-not\n"
+            "grouped\n"
+            "36\n"
             "Charlie\n";
 
         if (logical_output.str() != expected_logical) {

@@ -55,6 +55,13 @@ struct ExpressionCompiler {
             throw std::runtime_error("empty expression");
         }
 
+        while (has_enclosing_parentheses(expression)) {
+            expression = trim(expression.substr(1, expression.size() - 2));
+            if (expression.empty()) {
+                throw std::runtime_error("empty parenthesised expression");
+            }
+        }
+
         const std::string folded = upper(expression);
 
         if (expression.size() > 1 && expression.front() == '-') {
@@ -206,9 +213,53 @@ struct ExpressionCompiler {
     }
 
 private:
+    static bool has_enclosing_parentheses(const std::string& expression) {
+        if (expression.size() < 2 || expression.front() != '(' ||
+            expression.back() != ')') {
+            return false;
+        }
+
+        bool quoted = false;
+        char quote = 0;
+        int depth = 0;
+
+        for (std::size_t i = 0; i < expression.size(); ++i) {
+            const char c = expression[i];
+
+            if ((c == '"' || c == '\'') && (i == 0 || expression[i - 1] != '\\')) {
+                if (!quoted) {
+                    quoted = true;
+                    quote = c;
+                } else if (quote == c) {
+                    quoted = false;
+                }
+                continue;
+            }
+
+            if (quoted) {
+                continue;
+            }
+
+            if (c == '(') {
+                ++depth;
+            } else if (c == ')') {
+                --depth;
+                if (depth == 0 && i != expression.size() - 1) {
+                    return false;
+                }
+                if (depth < 0) {
+                    return false;
+                }
+            }
+        }
+
+        return depth == 0;
+    }
+
     static std::size_t find_operator(const std::string& expression, const std::string& op) {
         bool quoted = false;
         char quote = 0;
+        int depth = 0;
 
         for (std::size_t i = 0; i + op.size() <= expression.size(); ++i) {
             const char c = expression[i];
@@ -222,7 +273,20 @@ private:
                 continue;
             }
 
-            if (!quoted && expression.compare(i, op.size(), op) == 0) {
+            if (quoted) {
+                continue;
+            }
+
+            if (c == '(') {
+                ++depth;
+                continue;
+            }
+            if (c == ')') {
+                --depth;
+                continue;
+            }
+
+            if (depth == 0 && expression.compare(i, op.size(), op) == 0) {
                 if (op == ">" && i > 0 && expression[i - 1] == '-') {
                     continue;
                 }
@@ -240,6 +304,7 @@ private:
         const std::string& expression, const std::string& op) {
         bool quoted = false;
         char quote = 0;
+        int depth = 0;
         std::size_t found = std::string::npos;
 
         for (std::size_t i = 0; i + op.size() <= expression.size(); ++i) {
@@ -254,7 +319,20 @@ private:
                 continue;
             }
 
-            if (!quoted && expression.compare(i, op.size(), op) == 0) {
+            if (quoted) {
+                continue;
+            }
+
+            if (c == '(') {
+                ++depth;
+                continue;
+            }
+            if (c == ')') {
+                --depth;
+                continue;
+            }
+
+            if (depth == 0 && expression.compare(i, op.size(), op) == 0) {
                 if (op == ">" && i > 0 && expression[i - 1] == '-') {
                     continue;
                 }
@@ -719,7 +797,6 @@ void DbfTable::go_record(std::size_t one_based_record_number) {
         current_ = 0;
         return;
     }
-
     before_first_ = false;
     if (one_based_record_number > records_.size()) {
         current_ = records_.size();
