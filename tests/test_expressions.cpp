@@ -49,6 +49,17 @@ int main() {
         {"SET EXACT ON\n? 'ABC' == 'ABC '", ".F.\n"},
         {"SET EXACT ON\n? 'ABC' <> 'ABC '", ".F.\n"},
         {"SET EXACT ON\nSET EXACT OFF\n? 'ABC' = 'AB'", ".T.\n"},
+        {"? 'A  ' + 'B'", "A  B\n"},
+        {"? 'A  ' - 'B'", "AB  \n"},
+        {"? LEN('A  ' - 'B')", "4\n"},
+        {"? 'A  ' - 'B' == 'AB  '", ".T.\n"},
+        {"? 'A  ' + 'B' == 'A  B'", ".T.\n"},
+        {"? 'A  ' - 'B ' == 'AB   '", ".T.\n"},
+        {"? 'A  ' - 'B ' - 'C' == 'ABC   '", ".T.\n"},
+        {"? 'A  ' - '' == 'A  '", ".T.\n"},
+        {"? '' + '' == ''", ".T.\n"},
+        {"? UPPER('ab') + TRIM(' c ')", "AB c\n"},
+        {"? 20 - 5 - 3", "12\n"},
         {"? LEFT('ALICE', 3)", "ALI\n"},
         {"? RIGHT('ALICE', 2)", "CE\n"},
         {"? SUBSTR('ALICE', 2)", "LICE\n"},
@@ -113,7 +124,8 @@ int main() {
                  "? LEN(123)", "? UPPER(.T.)", "? TRIM(4)",
                  "? LEFT(7,2)", "? RIGHT('abcd','2')",
                  "? SUBSTR('abcd',.T.)", "? SUBSTR('abcd',2,'2')",
-                 "? SUBSTR('abc',0)", "? SUBSTR('abc',-1)"}) {
+                 "? SUBSTR('abc',0)", "? SUBSTR('abc',-1)",
+                 "? 'abc' + 2", "? 12 - '2'", "? '42' + 1"}) {
             std::ostringstream output;
             xabl::Vm vm(output);
             try {

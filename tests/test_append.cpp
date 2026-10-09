@@ -293,6 +293,18 @@ int main(int argc, char** argv) {
         require(slice_output.str() == "Charlie\nBob\nAlice\nCharlie\n",
                 "string slicing in filters failed: " + slice_output.str());
 
+        std::ostringstream concatenation_output;
+        xabl::Vm concat_vm(concatenation_output);
+        concat_vm.run(compiler.compile(
+            "USE branch\n"
+            "SET FILTER TO TRIM(NAME) + '!' == 'Charlie!'\n"
+            "GO TOP\n? NAME\n"
+            "SET FILTER TO LEFT(NAME,1) + RIGHT(NAME,1) == 'Ae'\n"
+            "GO TOP\n? NAME\n"), temp.path);
+        require(concatenation_output.str() == "Charlie\nAlice\n",
+                "string concatenation in DBF filters failed: " +
+                    concatenation_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

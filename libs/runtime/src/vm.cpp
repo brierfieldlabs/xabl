@@ -4,6 +4,7 @@
 #include "internal.hpp"
 #include "comparison.hpp"
 #include "text_functions.hpp"
+#include "operators.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -329,18 +330,12 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
-        case OpCode::Add: {
-            const Value rhs = pop();
-            const Value lhs = pop();
-            stack_.push_back(Value(lhs.as_number() + rhs.as_number()));
-            ++ip;
-            break;
-        }
-
+        case OpCode::Add:
         case OpCode::Subtract: {
             const Value rhs = pop();
             const Value lhs = pop();
-            stack_.push_back(Value(lhs.as_number() - rhs.as_number()));
+            stack_.push_back(
+                apply_additive_operator(instruction.opcode, lhs, rhs));
             ++ip;
             break;
         }
@@ -568,17 +563,12 @@ Value Vm::evaluate_expression(const Program& program) const {
             break;
         }
 
-        case OpCode::Add: {
-            const Value rhs = pop_value();
-            const Value lhs = pop_value();
-            values.push_back(Value(lhs.as_number() + rhs.as_number()));
-            break;
-        }
-
+        case OpCode::Add:
         case OpCode::Subtract: {
             const Value rhs = pop_value();
             const Value lhs = pop_value();
-            values.push_back(Value(lhs.as_number() - rhs.as_number()));
+            values.push_back(
+                apply_additive_operator(instruction.opcode, lhs, rhs));
             break;
         }
 
