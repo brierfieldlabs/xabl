@@ -51,3 +51,7 @@ STORE/REPLACE/USE clauses, documented in
 Physical DBF record updates verify their on-disk preimage before writing.
 The mechanism is optimistic, not a substitute for DBF file/record locking;
 see `docs/decisions/2026-10-09-dbf-stale-write-protection.md`.
+
+Cursor movement uses overflow-safe saturating DBF SKIP arithmetic, with
+checked numeric conversion in the VM and bounded filtered/indexed
+iteration. See `docs/decisions/2026-10-09-skip-range-safety.md`.

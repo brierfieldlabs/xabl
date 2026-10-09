@@ -120,6 +120,18 @@ int main(int argc, char** argv) {
                   ".T.\n.F.\n4\nCharlie\n",
               ("unexpected failed SEEK pointer behaviour: " + seeks.str()).c_str());
 
+        // Even an extreme count navigates to an indexed boundary without
+        // iterating over the requested count or overflowing the row index.
+        std::ostringstream wide_index_output;
+        xabl::Vm wide_index_vm(wide_index_output);
+        wide_index_vm.run(compiler.compile(
+            "USE shuffled\nSET INDEX TO shuffled\n"
+            "GO TOP\nSKIP 1e18\n? EOF()\n"
+            "SKIP -1e18\n? BOF()\n"
+            "SKIP\n? NAME\n"), temp.path);
+        check(wide_index_output.str() == ".T.\n.T.\nAlice\n",
+              "extreme indexed SKIP did not saturate at boundaries");
+
         // A cyclic NDX page pointer is corrupted input, not a navigation path.
         ndx[512 + 4] = 1;
         ndx[512 + 5] = 0;

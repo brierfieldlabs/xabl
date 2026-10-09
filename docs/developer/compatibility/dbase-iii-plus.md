@@ -50,7 +50,9 @@ independent original-product reference files are still outstanding.
 - `GO TOP`, `GO BOTTOM`, `GOTO BOTTOM` and `SKIP`:
   navigate NDX key order when indexed, physical order otherwise. Filters
   and global SET DELETED visibility compose with both modes; direct
-  `GO n` still addresses physical record numbers.
+  `GO n` still addresses physical record numbers. Extreme SKIP
+  distances saturate at BOF/EOF; non-finite and unrepresentable numeric
+  counts are rejected before conversion to the VM's native index type.
 - Regression tests use real DBF byte persistence and disposable table copies.
   `tests/fixtures/legacy-mini-ledger.prg` exercises multiple work areas,
   aggregation, filters, searching, append and updates.
