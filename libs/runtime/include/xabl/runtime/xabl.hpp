@@ -76,6 +76,7 @@ enum class OpCode {
     Less,
     Equal,
     EqualExact,
+    Contains,
     Jump,
     JumpIfFalse,
     SetFound,

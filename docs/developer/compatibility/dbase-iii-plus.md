@@ -144,3 +144,11 @@ replacement and insertion. Four arguments are required, including an
 explicit replacement string. Start positions beyond the target append;
 nonpositive quantities insert without deletion. Results are bounded to
 1 MiB as a modern XABL safety restriction, not an asserted DOS limit.
+
+## Substring comparisons
+
+The $ operator tests whether its left character expression occurs
+anywhere within its right character expression. It is case-sensitive,
+byte-oriented, false for an empty substring, and independent of
+SET EXACT. Its boolean result differs from AT()'s numeric position.
+DBF filters use the same bytecode operation as normal expressions.

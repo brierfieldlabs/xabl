@@ -565,6 +565,19 @@ int main(int argc, char** argv) {
         require(stuff_output.str() == "Alice\nCharlie\n",
                 "STUFF in filters failed: " + stuff_output.str());
 
+        std::ostringstream contained_output;
+        xabl::Vm contained_vm(contained_output);
+        contained_vm.run(compiler.compile(
+            "USE branch\n"
+            "SET FILTER TO 'ob' $ NAME\n"
+            "GO TOP\n? TRIM(NAME)\n"
+            "SET FILTER TO 'ar' $ NAME\n"
+            "GO TOP\n? TRIM(NAME)\n"
+            "SET FILTER TO '' $ NAME\n"
+            "GO TOP\n? EOF()\n"), temp.path);
+        require(contained_output.str() == "Bob\nCharlie\n.T.\n",
+                "$ substring filter semantics failed: " + contained_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

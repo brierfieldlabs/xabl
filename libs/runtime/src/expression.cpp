@@ -20,6 +20,7 @@ enum class Kind {
     End, Number, String, Identifier, True, False,
     LParen, RParen, Comma, Plus, Minus, Multiply, Divide,
     Greater, Less, Equal, EqualExact, NotEqual, GreaterEqual, LessEqual,
+    Contains,
     And, Or, Not
 };
 
@@ -144,6 +145,7 @@ public:
             if (accept('=')) return {Kind::NotEqual, "!=", start};
             break;
         case '#': return {Kind::NotEqual, "#", start};
+        case '$': return {Kind::Contains, "$", start};
         }
         throw std::runtime_error("unexpected character at column " +
                                  std::to_string(start + 1) + ": " + c);
@@ -175,7 +177,8 @@ int precedence(Kind kind) {
     case Kind::EqualExact:
     case Kind::NotEqual:
     case Kind::GreaterEqual:
-    case Kind::LessEqual: return 3;
+    case Kind::LessEqual:
+    case Kind::Contains: return 3;
     case Kind::Plus:
     case Kind::Minus: return 4;
     case Kind::Multiply:
@@ -390,6 +393,7 @@ private:
             case Kind::Less: emit(OpCode::Less); break;
             case Kind::Equal: emit(OpCode::Equal); break;
             case Kind::EqualExact: emit(OpCode::EqualExact); break;
+            case Kind::Contains: emit(OpCode::Contains); break;
             case Kind::NotEqual:
                 emit(OpCode::Equal);
                 emit(OpCode::UnaryNot);
