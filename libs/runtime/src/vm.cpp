@@ -92,6 +92,40 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
+        case OpCode::CloseTable: {
+            WorkArea& area = active_work_area();
+            area.table.reset();
+            area.index.reset();
+            area.filter.reset();
+            area.alias.clear();
+            area.found = false;
+            ++ip;
+            break;
+        }
+
+        case OpCode::CloseIndex: {
+            WorkArea& area = active_work_area();
+            area.index.reset();
+            area.found = false;
+            ++ip;
+            break;
+        }
+
+        case OpCode::AppendBlank: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("APPEND BLANK with no table open");
+            }
+            if (area.index) {
+                throw std::runtime_error(
+                    "APPEND BLANK requires closing NDX index until index writes are supported");
+            }
+            area.table->append_blank();
+            area.found = false;
+            ++ip;
+            break;
+        }
+
         case OpCode::OpenIndex: {
             WorkArea& area = active_work_area();
             if (!area.table) {
@@ -133,6 +167,21 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
                 throw std::runtime_error("GO TOP with no table open");
             }
             position_first_visible(area);
+            area.found = false;
+            ++ip;
+            break;
+        }
+
+        case OpCode::GoBottom: {
+            WorkArea& area = active_work_area();
+            if (!area.table) {
+                throw std::runtime_error("GO BOTTOM with no table open");
+            }
+            if (area.index) {
+                throw std::runtime_error(
+                    "GO BOTTOM in index order is not yet implemented");
+            }
+            position_last_visible(area);
             area.found = false;
             ++ip;
             break;
@@ -589,6 +638,14 @@ bool Vm::record_visible(const WorkArea& area) const {
     }
 
     return filter_matches(area);
+}
+
+void Vm::position_last_visible(WorkArea& area) {
+    area.table->go_bottom();
+    while (!area.table->eof() && !area.table->bof() &&
+           !record_visible(area)) {
+        area.table->skip(-1);
+    }
 }
 
 void Vm::position_first_visible(WorkArea& area) {
