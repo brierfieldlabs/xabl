@@ -19,6 +19,15 @@ namespace xabl {
 // and compares the complete string bytes (other dialects may differ).
 inline bool equal_values(const Value& lhs, const Value& rhs,
                          bool exact, bool strictly_equal) {
+    const auto* left_date = std::get_if<DateValue>(&lhs.storage());
+    const auto* right_date = std::get_if<DateValue>(&rhs.storage());
+    if (left_date || right_date) {
+        if (!left_date || !right_date)
+            throw std::runtime_error("date comparison type mismatch");
+        if (left_date->year == 0 || right_date->year == 0)
+            throw std::runtime_error("blank date comparison needs explicit handling");
+        return *left_date == *right_date;
+    }
     const auto* lhs_text = std::get_if<std::string>(&lhs.storage());
     const auto* rhs_text = std::get_if<std::string>(&rhs.storage());
     if (lhs_text || rhs_text) {
@@ -39,6 +48,19 @@ inline bool equal_values(const Value& lhs, const Value& rhs,
 // encoding for now. Do not reinterpret decimal-looking strings as numbers.
 // This is intentionally ASCII/bytewise rather than locale-collated.
 inline bool ordered_values(OpCode opcode, const Value& lhs, const Value& rhs) {
+    const auto* left_date = std::get_if<DateValue>(&lhs.storage());
+    const auto* right_date = std::get_if<DateValue>(&rhs.storage());
+    if (left_date || right_date) {
+        if (!left_date || !right_date)
+            throw std::runtime_error("date comparison type mismatch");
+        if (left_date->year == 0 || right_date->year == 0)
+            throw std::runtime_error("blank date comparison needs explicit handling");
+        const auto lhs_key = left_date->year * 10000 + left_date->month * 100 + left_date->day;
+        const auto rhs_key = right_date->year * 10000 + right_date->month * 100 + right_date->day;
+        if (opcode == OpCode::Less) return lhs_key < rhs_key;
+        if (opcode == OpCode::Greater) return lhs_key > rhs_key;
+        throw std::runtime_error("unsupported date relational opcode");
+    }
     const auto* lhs_text = std::get_if<std::string>(&lhs.storage());
     const auto* rhs_text = std::get_if<std::string>(&rhs.storage());
     if (lhs_text || rhs_text) {

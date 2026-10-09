@@ -15,6 +15,7 @@ import struct
 HERE = Path(__file__).parent
 DBF_OUT = HERE / "customers.dbf"
 NDX_OUT = HERE / "customers.ndx"
+DATES_OUT = HERE / "dates.dbf"
 
 FIELDS = [
     ("NAME", "C", 20, 0),
@@ -72,6 +73,38 @@ def write_dbf() -> None:
         handle.write(b"\x1a")
 
 
+def write_dates_dbf() -> None:
+    """Generate a real DBF III D-descriptor fixture with leap/blank dates."""
+    rows = [
+        ("Alice", "19840229", "        "),
+        ("Bob", "20001231", "19991231"),
+        ("Cara", "20240229", "        "),
+    ]
+    fields = [
+        ("NAME", "C", 12, 0),
+        ("STARTED", "D", 8, 0),
+        ("RETIRED", "D", 8, 0),
+    ]
+    record_length = 1 + sum(field[2] for field in fields)
+    header_length = 32 + 32 * len(fields) + 1
+    today = date.today()
+    header = bytearray(32)
+    header[0] = 0x03
+    header[1:4] = bytes((today.year - 1900, today.month, today.day))
+    struct.pack_into("<I", header, 4, len(rows))
+    struct.pack_into("<H", header, 8, header_length)
+    struct.pack_into("<H", header, 10, record_length)
+    with DATES_OUT.open("wb") as handle:
+        handle.write(header)
+        for field in fields:
+            handle.write(field_descriptor(*field))
+        handle.write(b"\r")
+        for name, started, retired in rows:
+            handle.write(b" " + name.encode("ascii").ljust(12, b" ") +
+                         started.encode("ascii") + retired.encode("ascii"))
+        handle.write(b"\x1a")
+
+
 def write_ndx() -> None:
     key_length = 20
     key_record_length = 28  # lower-page ptr + record no + 20-byte key
@@ -106,6 +139,7 @@ def write_ndx() -> None:
 
 def main() -> None:
     write_dbf()
+    write_dates_dbf()
     write_ndx()
 
 

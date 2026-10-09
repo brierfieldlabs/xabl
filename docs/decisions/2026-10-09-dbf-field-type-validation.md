@@ -30,3 +30,11 @@ file preservation. Do not change original test fixtures or user DBFs.
 This refusal is temporary, NOT a claim that dBASE III PLUS lacks
 proper date or memo support. Implement typed D values and DBT memo
 resolution before enabling those descriptor types.
+
+
+## Superseding implementation note: typed D fields
+
+The next date-runtime slice adds native DateValue storage and admits D
+descriptors only with width eight and zero decimals. Dates remain typed;
+malformed calendar data is refused without rewriting the file. The
+safety rationale of this ADR continues for M and unknown types.

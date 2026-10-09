@@ -87,3 +87,12 @@ add_test(
     COMMAND xabl_source_comments_tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures
 )
 set_tests_properties(xabl_source_comments PROPERTIES DEPENDS xabl_fixture_generate)
+
+
+add_executable(xabl_date_tests tests/test_dates.cpp)
+target_link_libraries(xabl_date_tests PRIVATE xabl_core)
+add_test(
+    NAME xabl_dates
+    COMMAND xabl_date_tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures
+)
+set_tests_properties(xabl_dates PROPERTIES DEPENDS xabl_fixture_generate)

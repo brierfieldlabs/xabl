@@ -79,3 +79,9 @@ use the same bounded string-editing helper.
 The classic $ containment operator belongs to the comparison
 precedence tier, compiles to Contains bytecode, and is evaluated through
 the same byte-oriented predicate in normal VM and embedded filters.
+
+DBF date values are a distinct DateValue variant in the VM; six
+single-argument date opcodes share date_functions.hpp in ordinary
+execution and compiled SET FILTER expressions. DBF physical D values
+remain eight-byte YYYYMMDD and are never coerced to normal strings by
+the file reader.
