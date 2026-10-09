@@ -5,3 +5,4 @@ cmake-build-*/
 .DS_Store
 
 [executed on device: git-workbench-brierfield (07c1d400-9390-48f2-99c8-e7f1f531a7ee)]
+tests/fixtures/*.dbf
