@@ -305,6 +305,23 @@ int main(int argc, char** argv) {
                 "string concatenation in DBF filters failed: " +
                     concatenation_output.str());
 
+        std::ostringstream ordering_output;
+        xabl::Vm ordering_vm(ordering_output);
+        ordering_vm.run(compiler.compile(
+            "USE branch\n"
+            "SET FILTER TO NAME >= 'Bob'\n"
+            "GO TOP\n? NAME\n"
+            "SKIP\n? NAME\n"
+            "SET FILTER TO NAME < 'Bob'\n"
+            "GO TOP\n? NAME\n"
+            "SET FILTER TO NAME # 'Bob'\n"
+            "GO TOP\n? NAME\n"
+            "SKIP\n? NAME\n"), temp.path);
+        require(ordering_output.str() ==
+                    "Bob\nCharlie\nAlice\nAlice\nCharlie\n",
+                "character ordering in filters failed: " +
+                    ordering_output.str());
+
         std::cout << "dBASE III append/navigation tests passed\n";
         return 0;
     } catch (const std::exception& ex) {

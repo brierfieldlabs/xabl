@@ -359,18 +359,11 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
             break;
         }
 
-        case OpCode::Greater: {
-            const Value rhs = pop();
-            const Value lhs = pop();
-            stack_.push_back(Value(lhs.as_number() > rhs.as_number()));
-            ++ip;
-            break;
-        }
-
+        case OpCode::Greater:
         case OpCode::Less: {
             const Value rhs = pop();
             const Value lhs = pop();
-            stack_.push_back(Value(lhs.as_number() < rhs.as_number()));
+            stack_.push_back(Value(ordered_values(instruction.opcode, lhs, rhs)));
             ++ip;
             break;
         }
@@ -589,17 +582,11 @@ Value Vm::evaluate_expression(const Program& program) const {
             break;
         }
 
-        case OpCode::Greater: {
-            const Value rhs = pop_value();
-            const Value lhs = pop_value();
-            values.push_back(Value(lhs.as_number() > rhs.as_number()));
-            break;
-        }
-
+        case OpCode::Greater:
         case OpCode::Less: {
             const Value rhs = pop_value();
             const Value lhs = pop_value();
-            values.push_back(Value(lhs.as_number() < rhs.as_number()));
+            values.push_back(Value(ordered_values(instruction.opcode, lhs, rhs)));
             break;
         }
 

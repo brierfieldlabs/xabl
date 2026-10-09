@@ -143,6 +143,7 @@ public:
         case '!':
             if (accept('=')) return {Kind::NotEqual, "!=", start};
             break;
+        case '#': return {Kind::NotEqual, "#", start};
         }
         throw std::runtime_error("unexpected character at column " +
                                  std::to_string(start + 1) + ": " + c);
