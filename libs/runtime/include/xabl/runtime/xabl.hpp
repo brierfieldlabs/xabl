@@ -160,6 +160,8 @@ public:
     explicit NdxIndex(std::filesystem::path path);
 
     [[nodiscard]] std::size_t seek(const Value& key) const;
+    /// Physical DBF row numbers in ascending NDX order (read-only snapshot).
+    [[nodiscard]] std::vector<std::size_t> ordered_records() const;
     [[nodiscard]] const std::string& expression() const noexcept;
 
 private:

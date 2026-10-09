@@ -7,6 +7,8 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <functional>
+#include <unordered_set>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -150,6 +152,76 @@ std::size_t NdxIndex::seek(const Value& key) const {
     }
 
     return 0;
+}
+
+std::vector<std::size_t> NdxIndex::ordered_records() const {
+    std::ifstream input(path_, std::ios::binary);
+    if (!input) {
+        throw std::runtime_error("cannot open NDX index: " + path_.string());
+    }
+    const auto bytes = std::filesystem::file_size(path_);
+    if (bytes < 1024 || bytes % 512 != 0) {
+        throw std::runtime_error("invalid NDX physical size");
+    }
+    const auto page_count = bytes / 512;
+    std::unordered_set<std::uint32_t> visited;
+    std::unordered_set<std::uint32_t> referenced_rows;
+    std::vector<std::size_t> records;
+
+    const auto read_u32 = [](const unsigned char* bytes) {
+        return static_cast<std::uint32_t>(bytes[0]) |
+               (static_cast<std::uint32_t>(bytes[1]) << 8) |
+               (static_cast<std::uint32_t>(bytes[2]) << 16) |
+               (static_cast<std::uint32_t>(bytes[3]) << 24);
+    };
+
+    // NDX nodes use an in-order B-tree arrangement. The lower-page
+    // pointer precedes each key, with the rightmost pointer after the
+    // final key. Treat repeated page references as corruption.
+    std::function<void(std::uint32_t, std::size_t)> traverse =
+        [&](std::uint32_t page_number, std::size_t depth) {
+        if (!page_number) return;
+        // Bound recursion even when a corrupt file has thousands of distinct
+        // pages arranged into an absurdly deep chain.
+        if (depth > 256) {
+            throw std::runtime_error("NDX B-tree exceeds safe traversal depth");
+        }
+        if (page_number >= page_count || !visited.insert(page_number).second) {
+            throw std::runtime_error("invalid or cyclic NDX page reference");
+        }
+        std::array<unsigned char, 512> page{};
+        input.clear();
+        input.seekg(static_cast<std::streamoff>(page_number) * 512);
+        input.read(reinterpret_cast<char*>(page.data()),
+                   static_cast<std::streamsize>(page.size()));
+        if (!input) {
+            throw std::runtime_error("truncated NDX page");
+        }
+        const auto count = read_u32(page.data());
+        if (key_record_length_ == 0 ||
+            count > (page.size() - 8) / key_record_length_) {
+            throw std::runtime_error("corrupt NDX key count");
+        }
+
+        for (std::uint32_t i = 0; i < count; ++i) {
+            const auto offset = 4 + static_cast<std::size_t>(i) *
+                                       key_record_length_;
+            const auto lower_page = read_u32(page.data() + offset);
+            const auto physical_row = read_u32(page.data() + offset + 4);
+            traverse(lower_page, depth + 1);
+            if (physical_row) {
+                if (!referenced_rows.insert(physical_row).second) {
+                    throw std::runtime_error("duplicate NDX physical record pointer");
+                }
+                records.push_back(physical_row);
+            }
+        }
+        const auto tail_offset = 4 + static_cast<std::size_t>(count) *
+                                        key_record_length_;
+        traverse(read_u32(page.data() + tail_offset), depth + 1);
+    };
+    traverse(root_page_, 0);
+    return records;
 }
 
 } // namespace xabl

@@ -71,3 +71,11 @@ set_tests_properties(xabl_control_flow PROPERTIES DEPENDS xabl_fixture_generate)
 add_executable(xabl_profile_tests tests/test_profiles.cpp)
 target_link_libraries(xabl_profile_tests PRIVATE xabl_core)
 add_test(NAME xabl_profiles COMMAND xabl_profile_tests)
+
+add_executable(xabl_ndx_navigation_tests tests/test_ndx_navigation.cpp)
+target_link_libraries(xabl_ndx_navigation_tests PRIVATE xabl_core)
+add_test(
+    NAME xabl_ndx_navigation
+    COMMAND xabl_ndx_navigation_tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures
+)
+set_tests_properties(xabl_ndx_navigation PROPERTIES DEPENDS xabl_fixture_generate)
