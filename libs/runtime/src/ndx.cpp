@@ -48,7 +48,10 @@ void NdxIndex::load_header() {
     key_record_length_ = read_u32(18);
 
     if (root_page_ == 0 || key_length_ == 0 ||
-        key_record_length_ < static_cast<std::uint32_t>(8U + key_length_)) {
+        key_record_length_ < static_cast<std::uint32_t>(8U + key_length_) ||
+        key_record_length_ > 504 ||
+        (key_type_ != 0 && key_type_ != 1) ||
+        (key_type_ == 1 && key_length_ < sizeof(double))) {
         throw std::runtime_error("unsupported or corrupt NDX header");
     }
 
@@ -95,9 +98,18 @@ std::size_t NdxIndex::seek(const Value& key) const {
         return 0;
     };
 
+    const auto bytes = std::filesystem::file_size(path_);
+    if (bytes < 1024 || bytes % 512 != 0) {
+        throw std::runtime_error("invalid NDX physical size");
+    }
+    const auto page_count = bytes / 512;
+    std::unordered_set<std::uint32_t> visited;
     std::uint32_t page_number = root_page_;
 
     while (page_number != 0) {
+        if (page_number >= page_count || !visited.insert(page_number).second) {
+            throw std::runtime_error("invalid or cyclic NDX SEEK page reference");
+        }
         std::array<unsigned char, 512> page{};
         input.seekg(static_cast<std::streamoff>(page_number) * 512, std::ios::beg);
         input.read(reinterpret_cast<char*>(page.data()),
@@ -107,6 +119,9 @@ std::size_t NdxIndex::seek(const Value& key) const {
         }
 
         const std::uint32_t count = read_u32(page.data());
+        if (count > (page.size() - 8) / key_record_length_) {
+            throw std::runtime_error("invalid NDX SEEK key count");
+        }
         std::uint32_t next_page = 0;
 
         for (std::uint32_t i = 0; i < count; ++i) {
