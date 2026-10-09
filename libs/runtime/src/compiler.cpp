@@ -43,6 +43,41 @@ std::string without_inline_comment(std::string_view source) {
     return std::string(source);
 }
 
+// Locate command separators such as " TO " without mistaking matching
+// words inside strings or nested parenthesised function expressions.
+std::size_t find_command_marker(std::string_view source,
+                                std::string_view marker) {
+    char quote = 0;
+    std::size_t nesting = 0;
+    for (std::size_t i = 0; i + marker.size() <= source.size(); ++i) {
+        const char c = source[i];
+        if (quote != 0) {
+            if (c == quote) {
+                if (i + 1 < source.size() && source[i + 1] == quote) {
+                    ++i;
+                } else {
+                    quote = 0;
+                }
+            }
+            continue;
+        }
+        if (c == '\'' || c == '"') {
+            quote = c;
+            continue;
+        }
+        if (c == '(') { ++nesting; continue; }
+        if (c == ')') {
+            if (nesting != 0) --nesting;
+            continue;
+        }
+        if (nesting == 0 &&
+            upper(std::string(source.substr(i, marker.size()))) == marker) {
+            return i;
+        }
+    }
+    return std::string::npos;
+}
+
 struct Block {
     enum class Kind { If, DoWhile };
     Kind kind;
@@ -144,9 +179,8 @@ Program Compiler::compile(std::string_view source) const {
 
             if (starts_with_ci(line, "USE ")) {
                 const std::string remainder = trim(line.substr(4));
-                const std::string folded = upper(remainder);
                 const std::string marker = " ALIAS ";
-                const auto alias_pos = folded.find(marker);
+                const auto alias_pos = find_command_marker(remainder, marker);
 
                 std::string table_name = remainder;
                 std::string alias;
@@ -282,8 +316,7 @@ Program Compiler::compile(std::string_view source) const {
             if (starts_with_ci(line, "STORE ")) {
                 const std::string remainder = line.substr(6);
                 const std::string marker = " TO ";
-                const std::string folded = upper(remainder);
-                const auto to_pos = folded.find(marker);
+                const auto to_pos = find_command_marker(remainder, marker);
                 if (to_pos == std::string::npos) {
                     throw std::runtime_error("STORE requires TO");
                 }
@@ -301,8 +334,7 @@ Program Compiler::compile(std::string_view source) const {
             if (starts_with_ci(line, "REPLACE ")) {
                 const std::string remainder = line.substr(8);
                 const std::string marker = " WITH ";
-                const std::string folded = upper(remainder);
-                const auto with_pos = folded.find(marker);
+                const auto with_pos = find_command_marker(remainder, marker);
                 if (with_pos == std::string::npos) {
                     throw std::runtime_error("REPLACE requires WITH");
                 }
