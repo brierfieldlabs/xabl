@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Brierfield Labs
 #include <xabl/runtime/xabl.hpp>
+#include <xabl/runtime/debugger.hpp>
 #include "internal.hpp"
 #include "comparison.hpp"
 #include "text_functions.hpp"
@@ -25,14 +26,81 @@ Vm::Vm(std::ostream& output, CompatibilityProfile profile)
 }
 
 void Vm::run(const Program& program, const std::filesystem::path& working_directory) {
+    begin(program, working_directory);
+    (void)execute(nullptr, false);
+}
+
+void Vm::begin(const Program& program,
+               const std::filesystem::path& working_directory) {
     if (program.dialect != profile_.dialect) {
         throw std::runtime_error("program/runtime compatibility profile mismatch");
     }
+    active_program_ = &program;
+    debug_directory_ = working_directory;
+    instruction_pointer_ = 0;
+    skip_breakpoint_once_ = false;
     stack_.clear();
-    std::size_t ip = 0;
+}
 
+bool Vm::debugging() const noexcept {
+    return active_program_ != nullptr;
+}
+
+void Vm::cancel_debugging() noexcept {
+    active_program_ = nullptr;
+    instruction_pointer_ = 0;
+    skip_breakpoint_once_ = false;
+    stack_.clear();
+}
+
+std::optional<SourceLocation> Vm::debug_location() const noexcept {
+    if (!active_program_ || instruction_pointer_ >= active_program_->code.size()) {
+        return std::nullopt;
+    }
+    const SourceLocation location = active_program_->code[instruction_pointer_].source;
+    return location.line ? std::optional<SourceLocation>{location} : std::nullopt;
+}
+
+DebugStop Vm::resume(const BreakpointMap& breakpoints) {
+    if (!active_program_) throw std::logic_error("no active debug session");
+    if (!breakpoints.matches(*active_program_)) {
+        throw std::invalid_argument("breakpoints belong to a different compiled program");
+    }
+    return execute(&breakpoints, false);
+}
+
+DebugStop Vm::step() {
+    if (!active_program_) throw std::logic_error("no active debug session");
+    return execute(nullptr, true);
+}
+
+DebugStop Vm::execute(const BreakpointMap* breakpoints, bool single_step) {
+    if (!active_program_) throw std::logic_error("no active debug session");
+    const Program& program = *active_program_;
+    const auto& working_directory = debug_directory_;
+    std::size_t& ip = instruction_pointer_;
+    // Ordinary run() and continue() must not rebuild or query the source
+    // index for every opcode. Only statement stepping needs that lookup.
+    std::optional<BreakpointMap> statement_map;
+    if (single_step) statement_map.emplace(program);
+    bool executed = false;
+
+    try {
     while (ip < program.code.size()) {
         const Instruction& instruction = program.code[ip];
+        const bool boundary = single_step && instruction.source.line != 0 &&
+            statement_map->instruction_at(instruction.source.line) == ip;
+        if (single_step && executed && boundary) {
+            skip_breakpoint_once_ = true;
+            return DebugStop::Step;
+        }
+        if (!single_step && breakpoints &&
+            breakpoints->should_pause(ip) && !skip_breakpoint_once_) {
+            skip_breakpoint_once_ = true;
+            return DebugStop::Breakpoint;
+        }
+        skip_breakpoint_once_ = false;
+        executed = true;
 
         switch (instruction.opcode) {
         case OpCode::PushLiteral:
@@ -569,8 +637,16 @@ void Vm::run(const Program& program, const std::filesystem::path& working_direct
         }
 
         case OpCode::Halt:
-            return;
+            active_program_ = nullptr;
+            return DebugStop::Finished;
         }
+    }
+    active_program_ = nullptr;
+    return DebugStop::Finished;
+    } catch (...) {
+        // Never resume a partially executed, failing instruction.
+        active_program_ = nullptr;
+        throw;
     }
 }
 

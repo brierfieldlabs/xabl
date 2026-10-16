@@ -23,10 +23,14 @@ struct Breakpoint {
 /// breakpoint resolves to the FIRST instruction belonging to that statement,
 /// so expression evaluation cannot cause multiple stops on the same line.
 /// Rebuild this object whenever source is recompiled; offsets are not stable
-/// across program versions. Runtime pause/step controls are not yet provided.
+/// across program versions. Use with Vm::begin/resume/step; setting
+/// breakpoints never executes bytecode or opens a database.
 class BreakpointMap {
 public:
     explicit BreakpointMap(const Program& program);
+
+    /// A breakpoint map cannot be reused for different compiled bytecode.
+    [[nodiscard]] bool matches(const Program& program) const noexcept;
 
     /// Return the first executable bytecode offset on a source line.
     [[nodiscard]] std::optional<std::size_t> instruction_at(
@@ -52,6 +56,7 @@ public:
     [[nodiscard]] std::vector<Breakpoint> enabled() const;
 
 private:
+    const Program* program_{};
     std::map<std::size_t, std::size_t> source_to_instruction_;
     std::set<std::size_t> active_lines_;
     std::set<std::size_t> active_offsets_;

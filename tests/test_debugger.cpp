@@ -2,7 +2,11 @@
 // Copyright (C) 2026 Brierfield Labs
 #include <xabl/runtime/debugger.hpp>
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -121,12 +125,221 @@ void test_embedded_program_and_unsourced_bytecode() {
     check(unknown.executable_lines().empty(), "unsourced bytecode is not breakable");
 }
 
+
+void test_resumable_vm_execution() {
+    const auto program = xabl::Compiler{}.compile(
+        "STORE 0 TO n\n"
+        "n = n + 1\n"
+        "? n\n"
+        "n = n + 1\n"
+        "? n\n");
+    xabl::BreakpointMap breaks(program);
+    check(breaks.enable(2) && breaks.enable(4),
+          "unable to set test breakpoints");
+
+    std::ostringstream output;
+    xabl::Vm vm(output);
+    vm.begin(program, ".");
+    check(vm.debugging(), "begin did not activate debug session");
+    check(vm.debug_location() && vm.debug_location()->line == 1,
+          "begin did not locate first statement");
+    check(output.str().empty() && vm.variables().empty(),
+          "begin must not execute source");
+
+    check(vm.resume(breaks) == xabl::DebugStop::Breakpoint,
+          "expected first breakpoint");
+    check(vm.debug_location() && vm.debug_location()->line == 2,
+          "first breakpoint must halt before line 2");
+    check(vm.variables().at("N").as_number() == 0.0 && output.str().empty(),
+          "first breakpoint executed the paused statement");
+
+    check(vm.resume(breaks) == xabl::DebugStop::Breakpoint,
+          "continuing should bypass the current breakpoint once");
+    check(vm.debug_location() && vm.debug_location()->line == 4,
+          "second breakpoint must stop at line 4");
+    check(vm.variables().at("N").as_number() == 1.0 && output.str() == "1\n",
+          "continue repeated or skipped instructions");
+
+    check(vm.step() == xabl::DebugStop::Step,
+          "step did not stop at next statement");
+    check(vm.debug_location() && vm.debug_location()->line == 5,
+          "step must stop before line 5");
+    check(vm.variables().at("N").as_number() == 2.0 && output.str() == "1\n",
+          "step executed too many statements");
+
+    check(vm.step() == xabl::DebugStop::Finished,
+          "last statement and HALT should finish session");
+    check(!vm.debugging() && !vm.debug_location() && output.str() == "1\n2\n",
+          "finished debug session has wrong output or location");
+    try {
+        (void)vm.step();
+        throw std::runtime_error("stepping completed program was accepted");
+    } catch (const std::logic_error&) {
+        // A completed debug session cannot silently restart.
+    }
+}
+
+void test_loop_breakpoints_are_revisited() {
+    const auto program = xabl::Compiler{}.compile(
+        "STORE 0 TO n\n"
+        "DO WHILE n < 3\n"
+        "n = n + 1\n"
+        "ENDDO\n"
+        "? n\n");
+    xabl::BreakpointMap breaks(program);
+    breaks.enable(3);
+    std::ostringstream output;
+    xabl::Vm vm(output);
+    vm.begin(program, ".");
+    for (int n = 0; n != 3; ++n) {
+        check(vm.resume(breaks) == xabl::DebugStop::Breakpoint,
+              "expected breakpoint on each loop iteration");
+        check(vm.debug_location() && vm.debug_location()->line == 3,
+              "loop breakpoint stopped on wrong statement");
+        check(vm.variables().at("N").as_number() == static_cast<double>(n),
+              "loop breakpoint advanced too far");
+    }
+    check(vm.resume(breaks) == xabl::DebugStop::Finished,
+          "loop did not finish after final iteration");
+    check(output.str() == "3\n", "loop output changed under debugger");
+
+    // Step across a loop back-edge and stop on the same statement again.
+    std::ostringstream second_output;
+    xabl::Vm stepped(second_output);
+    stepped.begin(program, ".");
+    check(stepped.step() == xabl::DebugStop::Step &&
+              stepped.debug_location()->line == 2,
+          "step did not reach loop condition");
+    check(stepped.step() == xabl::DebugStop::Step &&
+              stepped.debug_location()->line == 3,
+          "step did not reach loop body");
+    check(stepped.step() == xabl::DebugStop::Step &&
+              stepped.debug_location()->line == 4,
+          "step did not reach loop back-edge");
+    check(stepped.step() == xabl::DebugStop::Step &&
+              stepped.debug_location()->line == 2,
+          "step did not return to repeated loop condition");
+}
+
+void test_debug_validation_and_error_safety() {
+    const auto program = xabl::Compiler{}.compile("? 42\n");
+    const auto other = xabl::Compiler{}.compile("? 99\n");
+    xabl::BreakpointMap wrong(other);
+    xabl::BreakpointMap right(program);
+    std::ostringstream output;
+    xabl::Vm vm(output);
+    vm.begin(program, ".");
+    try {
+        (void)vm.resume(wrong);
+        throw std::runtime_error("foreign breakpoint map accepted");
+    } catch (const std::invalid_argument&) {
+        check(vm.debugging() && output.str().empty(),
+              "foreign map changed execution state");
+    }
+    check(vm.resume(right) == xabl::DebugStop::Finished,
+          "valid map could not resume after rejection");
+    check(output.str() == "42\n", "valid program executed incorrectly");
+
+    // No filesystem access or program execution before an explicit step.
+    const auto missing_dbf = xabl::Compiler{}.compile(
+        "USE xabl_debugger_deliberately_missing_dbf\n? 1\n");
+    std::ostringstream dbf_output;
+    xabl::Vm dbf_vm(dbf_output);
+    dbf_vm.begin(missing_dbf, "/nonexistent/xabl-debugger-directory");
+    check(dbf_vm.debugging() && dbf_output.str().empty(),
+          "begin accessed a database or emitted output");
+    bool failed = false;
+    try {
+        (void)dbf_vm.step();
+    } catch (const std::runtime_error&) {
+        failed = true;
+    }
+    check(failed && !dbf_vm.debugging(),
+          "failed instruction should abort resumable execution");
+
+    // Ordinary run() remains compatible with temporary Program arguments.
+    std::ostringstream plain_output;
+    xabl::Vm plain(plain_output);
+    plain.run(xabl::Compiler{}.compile("? 7\n"), ".");
+    check(plain_output.str() == "7\n" && !plain.debugging(),
+          "legacy run semantics changed");
+}
+
+
+std::string file_bytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream) throw std::runtime_error("cannot open debugger DBF fixture");
+    std::ostringstream content;
+    content << stream.rdbuf();
+    return content.str();
+}
+
+void test_explicit_database_write(const std::filesystem::path& fixtures) {
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path directory = fs::temp_directory_path() /
+        ("xabl-debugger-" + std::to_string(stamp));
+    struct Cleanup {
+        fs::path directory;
+        ~Cleanup() {
+            std::error_code ignored;
+            fs::remove_all(directory, ignored);
+        }
+    } cleanup{directory};
+    fs::create_directories(directory);
+    fs::copy_file(fixtures / "customers.dbf", directory / "debug.dbf");
+    const std::string original = file_bytes(directory / "debug.dbf");
+
+    const auto program = xabl::Compiler{}.compile(
+        "USE debug\nAPPEND BLANK\n? RECCOUNT()\nUSE\n");
+    xabl::BreakpointMap breakpoints(program);
+    breakpoints.enable(2);
+    std::ostringstream output;
+    xabl::Vm vm(output);
+
+    vm.begin(program, directory);
+    check(file_bytes(directory / "debug.dbf") == original,
+          "begin mutated DBF before execution");
+    check(vm.resume(breakpoints) == xabl::DebugStop::Breakpoint,
+          "expected breakpoint before APPEND BLANK");
+    check(file_bytes(directory / "debug.dbf") == original,
+          "APPEND BLANK ran before the debugger resumed");
+
+    vm.cancel_debugging();
+    check(!vm.debugging() && !vm.debug_location(),
+          "cancel did not discard paused execution");
+    check(file_bytes(directory / "debug.dbf") == original,
+          "cancel performed an unauthorised DBF write");
+
+    // Explicitly stepping over APPEND permits exactly one intended write.
+    vm.begin(program, directory);
+    check(vm.resume(breakpoints) == xabl::DebugStop::Breakpoint,
+          "new session did not break before APPEND");
+    check(vm.step() == xabl::DebugStop::Step,
+          "single step did not execute APPEND");
+    check(vm.debug_location() && vm.debug_location()->line == 3,
+          "step continued beyond DBF write statement");
+    check(xabl::DbfTable(directory / "debug.dbf").reccount() == 4,
+          "explicitly stepped APPEND did not persist");
+    check(output.str().empty(), "stepping APPEND unexpectedly printed");
+    check(vm.resume(breakpoints) == xabl::DebugStop::Finished,
+          "could not continue after DBF write");
+    check(output.str() == "4\n", "post-append output changed");
+    check(file_bytes(fixtures / "customers.dbf") == original,
+          "disposable test unexpectedly changed original DBF fixture");
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc != 2) return 2;
     try {
         test_mapping_and_breakpoints();
         test_embedded_program_and_unsourced_bytecode();
+        test_resumable_vm_execution();
+        test_loop_breakpoints_are_revisited();
+        test_debug_validation_and_error_safety();
+        test_explicit_database_write(argv[1]);
         std::cout << "source mapping and breakpoint tests passed\n";
         return 0;
     } catch (const std::exception& error) {
