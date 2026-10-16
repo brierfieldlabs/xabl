@@ -14,7 +14,8 @@ independent original-product reference files are still outstanding.
   onto following physical lines, including before a trailing inline
   && comment. Continuation-only lines do not create new breakpoint
   locations. Multiple statements separated by semicolons on one
-  physical line remain separate future compatibility work.
+  physical line are not yet implemented and now fail explicitly,
+  rather than being mistaken for parts of a variable or expression.
 - STORE TO, REPLACE WITH and USE ALIAS separators are now recognised
   outside quoted character expressions and parenthesised calls; embedded
   keyword text is retained as a literal, not a spurious clause.

@@ -80,7 +80,10 @@ int main(int argc, char** argv) {
                  "? 1 + ;",             // EOF after trailing continuation
                  "? 1 + ;\n&& comment",// no next executable source
                  "  ? 1 + ;\n  BADNAME(3)",
-                 "? 'unterminated;\n? 8"  // quote shields semicolon
+                 "? 'unterminated;\n? 8", // quote shields semicolon
+                 "STORE 1 TO n; STORE 2 TO m",
+                 "? 'one;two'; ? 'three'",
+                 "? 1; ? 2;"  // both same-line and terminal separators
              }) {
             bool failed = false;
             try { (void)compiler.compile(bad); }
@@ -90,6 +93,14 @@ int main(int argc, char** argv) {
                                          std::string(bad));
             }
         }
+        try {
+            (void)compiler.compile("   STORE 1 TO n; ? n\n");
+            throw std::runtime_error("unsupported same-line command separator accepted");
+        } catch (const std::runtime_error& ex) {
+            if (std::string(ex.what()).find("line 1: same-line semicolon") ==
+                std::string::npos) throw;
+        }
+
         try {
             (void)compiler.compile(
                 "? 5 + ; && comment\n"
