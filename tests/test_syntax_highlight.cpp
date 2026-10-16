@@ -27,6 +27,10 @@ int main() {
               {7, 4, SyntaxKind::Function}, {12, 10, SyntaxKind::String}});
         check("? 3.14e-2 + .5", {{2, 7, SyntaxKind::Number}, {12, 2, SyntaxKind::Number}});
         check("? 5 * 2", {{2, 1, SyntaxKind::Number}, {6, 1, SyntaxKind::Number}});
+        check("CASE .T.", {{0, 4, SyntaxKind::Keyword},
+                            {5, 3, SyntaxKind::Logical}});
+        check("OTHERWISE", {{0, 9, SyntaxKind::Keyword}});
+        check("ENDCASE", {{0, 7, SyntaxKind::Keyword}});
         check("   ", {});
         check("? 'unfinished", {{2, 11, SyntaxKind::String}});
         std::cout << "syntax-highlighting tests passed\n";

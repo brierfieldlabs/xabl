@@ -94,12 +94,13 @@ struct StatementSourceScope {
 };
 
 struct Block {
-    enum class Kind { If, DoWhile };
+    enum class Kind { If, DoWhile, DoCase };
     Kind kind;
     std::size_t jump_index;
     std::size_t loop_start;
     bool has_else{false};
     std::vector<std::size_t> exit_jumps{};
+    bool has_case{false};
 };
 
 } // namespace
@@ -403,6 +404,65 @@ Program Compiler::compile(std::string_view source) const {
                 const Block block = blocks.back();
                 blocks.pop_back();
                 program.code[block.jump_index].target = program.code.size();
+                continue;
+            }
+
+            if (equal_ci(line, "DO CASE")) {
+                blocks.push_back({Block::Kind::DoCase, 0, 0});
+                continue;
+            }
+
+            if (equal_ci(line, "CASE") || starts_with_ci(line, "CASE ")) {
+                if (blocks.empty() || blocks.back().kind != Block::Kind::DoCase ||
+                    blocks.back().has_else) {
+                    throw std::runtime_error("CASE without open DO CASE");
+                }
+                const std::string condition = trim(line.substr(4));
+                if (condition.empty()) {
+                    throw std::runtime_error("CASE requires a condition");
+                }
+                Block& block = blocks.back();
+                if (block.has_case) {
+                    // A successful prior branch skips all later branches;
+                    // its false condition jumps past this unconditional jump.
+                    block.exit_jumps.push_back(program.code.size());
+                    program.code.push_back({OpCode::Jump});
+                    program.code[block.jump_index].target = program.code.size();
+                }
+                expression_compiler.emit(condition);
+                block.jump_index = program.code.size();
+                program.code.push_back({OpCode::JumpIfFalse});
+                block.has_case = true;
+                continue;
+            }
+
+            if (equal_ci(line, "OTHERWISE")) {
+                if (blocks.empty() || blocks.back().kind != Block::Kind::DoCase ||
+                    !blocks.back().has_case || blocks.back().has_else) {
+                    throw std::runtime_error("OTHERWISE without unmatched CASE");
+                }
+                Block& block = blocks.back();
+                block.exit_jumps.push_back(program.code.size());
+                program.code.push_back({OpCode::Jump});
+                program.code[block.jump_index].target = program.code.size();
+                block.has_else = true;
+                continue;
+            }
+
+            if (equal_ci(line, "ENDCASE")) {
+                if (blocks.empty() || blocks.back().kind != Block::Kind::DoCase ||
+                    !blocks.back().has_case) {
+                    throw std::runtime_error("ENDCASE without matching CASE");
+                }
+                const Block block = blocks.back();
+                blocks.pop_back();
+                const std::size_t end = program.code.size();
+                if (!block.has_else) {
+                    program.code[block.jump_index].target = end;
+                }
+                for (const auto exit_jump : block.exit_jumps) {
+                    program.code[exit_jump].target = end;
+                }
                 continue;
             }
 

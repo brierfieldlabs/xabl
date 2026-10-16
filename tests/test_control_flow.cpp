@@ -78,6 +78,56 @@ DO WHILE outer < 3
 ENDDO
 )", "12\n22\n32\n", ".");
 
+        // The first true CASE wins, and later CASE/OTHERWISE bodies
+        // are skipped. Nested blocks must keep their own jump targets.
+        verify(R"(
+STORE 0 TO n
+DO CASE
+    CASE n < 0
+        ? "wrong"
+    CASE n = 0
+        ? "zero"
+    CASE .T.
+        ? "wrong"
+    OTHERWISE
+        ? "wrong"
+ENDCASE
+DO CASE
+    CASE .F.
+        ? "wrong"
+    CASE .F.
+        ? "wrong"
+ENDCASE
+DO CASE
+    CASE .F.
+        ? "wrong"
+    OTHERWISE
+        DO CASE
+            CASE .T.
+                IF .T.
+                    ? "nested"
+                ENDIF
+            OTHERWISE
+                ? "wrong"
+        ENDCASE
+ENDCASE
+)", "zero\nnested\n", ".");
+
+        verify(R"(
+STORE 0 TO n
+DO WHILE n < 3
+    n = n + 1
+    DO CASE
+        CASE n = 1
+            ? "one"
+        CASE n = 2
+            ? "two"
+        OTHERWISE
+            ? "three"
+    ENDCASE
+ENDDO
+)", "one\ntwo\nthree\n", ".");
+
         verify(R"(
 USE customers
 GO TOP
@@ -100,7 +150,15 @@ ENDDO
                  "IF .T.\nELSE\nELSE\nENDIF",
                  "IF .T.\nELSE\nENDDO",
                  "DO WHILE .T.\nIF .T.\nEXIT\nENDIF",
-                 "IF .T.\nLOOP\nENDIF"}) {
+                 "IF .T.\nLOOP\nENDIF",
+                 "CASE .T.", "OTHERWISE", "ENDCASE",
+                 "DO CASE\nENDCASE",
+                 "DO CASE\nOTHERWISE\nENDCASE",
+                 "DO CASE\nCASE\nENDCASE",
+                 "DO CASE\nCASE .T.\nOTHERWISE\nOTHERWISE\nENDCASE",
+                 "DO CASE\nCASE .T.\nOTHERWISE\nCASE .F.\nENDCASE",
+                 "DO CASE\nCASE .T.\nENDIF",
+                 "DO CASE\nCASE .T.\nDO WHILE .F.\nENDCASE"}) {
             reject(bad);
         }
 

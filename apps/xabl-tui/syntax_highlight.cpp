@@ -18,11 +18,11 @@ std::string upper(std::string_view source) {
     return result;
 }
 
-constexpr std::array<std::string_view, 40> keywords{
-    "AND", "APPEND", "BLANK", "BOF", "BY", "CLOSE", "CONTINUE", "DELETE",
-    "DELETED", "DO", "ELSE", "ENDDO", "ENDIF", "EOF", "EXACT", "FALSE",
+constexpr std::array<std::string_view, 43> keywords{
+    "AND", "APPEND", "BLANK", "BOF", "BY", "CASE", "CLOSE", "CONTINUE", "DELETE",
+    "DELETED", "DO", "ELSE", "ENDCASE", "ENDDO", "ENDIF", "EOF", "EXACT", "FALSE",
     "FILTER", "FOR", "FOUND", "GO", "GOTO", "IF", "INDEX", "LOCATE",
-    "NOT", "OFF", "ON", "OR", "RECALL", "REPLACE", "SELECT", "SEEK",
+    "NOT", "OFF", "ON", "OR", "OTHERWISE", "RECALL", "REPLACE", "SELECT", "SEEK",
     "SET", "SKIP", "TO", "TOP", "TRUE", "USE", "WHILE", "WITH"};
 constexpr std::array<std::string_view, 33> functions{
     "ABS", "ASC", "AT", "BOF", "CHR", "CTOD", "DAY", "DELETED", "DTOC",

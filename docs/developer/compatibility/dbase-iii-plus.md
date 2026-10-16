@@ -41,6 +41,10 @@ independent original-product reference files are still outstanding.
   Filter programs share the same runtime setting.
 - `IF/ELSE/ENDIF` and `DO WHILE/LOOP/EXIT/ENDDO`: nested control
   flow, condition rechecking and early-loop exit.
+- DO CASE / CASE / OTHERWISE / ENDCASE: evaluate conditions in order
+  and execute only the first matching branch. OTHERWISE is optional;
+  cases can nest inside loops, IF blocks and other cases. Invalid block
+  structure is rejected at compile time.
 - `APPEND BLANK`: append a physical blank DBF record, update the 32-bit
   header record count and the last-update date, retain/write the 0x1A EOF byte,
   and leave the record pointer on the new row.

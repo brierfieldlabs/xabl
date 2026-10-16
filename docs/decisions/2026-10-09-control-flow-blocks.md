@@ -20,3 +20,14 @@ ELSEIF, FOR/NEXT, SCAN/ENDSCAN or user-defined procedures.
 
 The regression suite exercises nested branches, nested DO WHILE loops,
 DBF iteration, skipping, early exit and invalid blocks.
+
+
+## Follow-up: DO CASE (16 October 2026)
+
+The original compiler block/jump implementation now supports the
+dBASE III PLUS DO CASE, CASE expression, optional OTHERWISE and ENDCASE
+statements. Conditions are evaluated in order, and only the first true
+branch executes. With no matching CASE and no OTHERWISE, nothing runs.
+Nested cases use the existing control-block stack and VM jump opcodes,
+without a separate interpreter subsystem. Regression coverage lives
+in the existing control-flow suite. Linked to issue #52.
