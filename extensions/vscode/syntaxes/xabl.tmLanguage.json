@@ -1,0 +1,50 @@
+{
+  "name": "XABL",
+  "scopeName": "source.xabl",
+  "patterns": [
+    {
+      "name": "comment.line.asterisk.xabl",
+      "match": "^\\s*\\*.*$"
+    },
+    {
+      "name": "comment.line.note.xabl",
+      "match": "(?i)^\\s*NOTE\\b.*$"
+    },
+    {
+      "name": "comment.line.double-ampersand.xabl",
+      "match": "&&.*$"
+    },
+    {
+      "name": "string.quoted.xabl",
+      "match": "'(?:''|[^'])*'|\"(?:\\\"\\\"|[^\"])*\\\""
+    },
+    {
+      "name": "constant.language.boolean.xabl",
+      "match": "(?i)(?<![\\w.])\\.(?:T|F)\\.(?![\\w])"
+    },
+    {
+      "name": "keyword.control.xabl",
+      "match": "(?i)\\b(?:if|else|endif|do|while|enddo|for|next|to|step|exit|loop|return|case|otherwise|endcase|locate|continue)\\b"
+    },
+    {
+      "name": "keyword.other.xabl",
+      "match": "(?i)\\b(?:append|blank|close|delete|go|goto|index|on|off|recall|replace|select|seek|set|skip|use|top|bottom|with|from|found|exact|filter|all|record|rest|store)\\b"
+    },
+    {
+      "name": "keyword.operator.logical.xabl",
+      "match": "(?i)(?<![\\w.])\\.(?:AND|OR|NOT)\\.(?![\\w])"
+    },
+    {
+      "name": "support.function.xabl",
+      "match": "(?i)\\b(?:abs|asc|at|bof|chr|ctod|day|deleted|dtoc|dtos|eof|found|int|left|len|lower|ltrim|max|min|month|recno|reccount|replicate|right|rtrim|space|str|stuff|substr|trim|upper|val|year)\\b(?=\\s*\\()"
+    },
+    {
+      "name": "constant.numeric.xabl",
+      "match": "(?<![\\w.])(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[eE][+-]?\\d+)?\\b"
+    },
+    {
+      "name": "keyword.operator.comparison.xabl",
+      "match": "==|!=|<>|<=|>=|<|>|="
+    }
+  ]
+}

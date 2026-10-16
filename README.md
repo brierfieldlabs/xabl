@@ -13,7 +13,7 @@ proper record locking, index maintenance and DBT support remain pending.
 
 There are now two executables:
 
-- `xabl`: compile/run a legacy `.prg` source from the shell.
+- `xabl`: compile/run (or compile-check without execution) a legacy `.prg` source from the shell.
 - `xabl-tui`: DOS-inspired text IDE with a full-screen blue editor, keyboard
   shortcuts, syntax colouring, F3 file browser, source-file editing,
   compile-only check, source debugging and run/output screens.
@@ -27,6 +27,11 @@ cmake --build build -j2
 ctest --test-dir build --output-on-failure
 ./build/xabl-tui tests/fixtures/legacy-customer-review.prg
 ```
+
+An optional VS Code extension is available under extensions/vscode;
+it uses the same C++ xabl compiler for Check/Run tasks and provides syntax
+highlighting. Use xabl --check file.prg for compile-only diagnostics.
+The choice of a future full Qt GUI remains open in issue #45.
 
 The TUI is terminal-hosted, not an MS-DOS executable. See
 `docs/user/text-studio.md` for shortcuts, limitations and precautions.
