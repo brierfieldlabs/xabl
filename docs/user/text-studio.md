@@ -44,6 +44,7 @@ terminal behaviour after normal editor exit.
 | Ctrl+B | Toggle a breakpoint on an executable source line |
 | Ctrl+D | Start debugging / continue to the next breakpoint |
 | Ctrl+T | Run one source statement in the debugger |
+| Ctrl+V | View current variables while the debugger is paused |
 | Ctrl+X | Stop the debugger (no rollback of prior DBF writes) |
 | F10 or Ctrl+Q | Exit, with unsaved-changes confirmation |
 | Ctrl+Z | Undo an edit (up to 40 recent steps) |
@@ -66,7 +67,8 @@ Breakpoints are marked with an asterisk next to the gutter line number; the
 next paused statement is marked with a greater-than symbol. Set a breakpoint
 with Ctrl+B on valid, compilable source. Ctrl+D asks before starting because
 subsequent execution can modify DBF files. Ctrl+T steps one source statement
-at a time; F6 lets you review output between stops. Breakpoints are cleared
+at a time; F6 lets you review output between stops. Ctrl+V opens
+a read-only, alphabetically sorted list of the current VM variables. Breakpoints are cleared
 if you edit the source or open another file. Editing and switching source
 are disabled during a paused debugger session; Ctrl+X cancels remaining
 execution so you can edit again. Cancelling does not undo statements already
