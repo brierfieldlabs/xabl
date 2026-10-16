@@ -26,76 +26,80 @@ It does not require a mouse. Ctrl+S/Q bypass terminal flow control and
 Ctrl+Z bypasses terminal suspend on supported Unix systems, restoring
 terminal behaviour after normal editor exit.
 
-## Keys
+## Keyboard layout
+
+Text Studio follows the Borland/Turbo Pascal IDE conventions where the
+present XABL features allow it. The
+[Free Pascal IDE keyboard reference](https://www.freepascal.org/daily/doc/user/userse32.html)
+preserves many historical DOS-era Borland key combinations.
 
 | Key | Operation |
 | --- | --- |
-| F1 | Toggle keyboard help |
-| F2 | Browse PRG and XABL source files |
-| Ctrl+O | Open by entering a source path |
-| F3 | New/empty file |
-| F4 or Ctrl+S | Save file; prompt for path if untitled |
-| F5 | Compile and **run** the open source |
-| F6 | Toggle output screen and editor |
-| F7 or Ctrl+F | Search forward, wrapping at end of file |
-| F8 | Find next; in compiler output, jump to reported error line |
-| Ctrl+G | Go to a numbered source line (1-based) |
-| F9 | Compile only, **without running program statements** |
-| Ctrl+B | Toggle a breakpoint on an executable source line |
-| Ctrl+D | Start debugging / continue to the next breakpoint |
-| Ctrl+T | Run one source statement in the debugger |
-| Ctrl+V | View current variables while the debugger is paused |
-| Ctrl+X | Stop the debugger (no rollback of prior DBF writes) |
-| F10 or Ctrl+Q | Exit, with unsaved-changes confirmation |
-| Ctrl+Z | Undo an edit (up to 40 recent steps) |
+| F1 | Help |
+| F2 / Ctrl+S | Save |
+| F3 | Browse/open a PRG or XABL file |
+| Ctrl+O | Open by path |
+| Ctrl+N | New/empty file |
+| F4 | Run to cursor or an earlier breakpoint |
+| F5 | Zoom/unzoom editor |
+| F6 | Switch editor/output |
+| F7 / F8 | Step one source statement |
+| F9 / Alt+F9 | Build/compile only, without executing |
+| F10 | Command menu (fallback for modified F-keys) |
+| Ctrl+F8 | Toggle an executable-line breakpoint |
+| Ctrl+F9 | Run or continue |
+| Ctrl+F2 | Stop/reset debugging |
+| Ctrl+F7 | Inspect current variables (read-only) |
+| Alt+F5 | Program output |
+| Alt+X / Ctrl+Q | Quit, confirming unsaved changes |
+| Ctrl+F / Ctrl+G | Find / Go to source line |
+| Ctrl+E / F12 | Jump to reported compiler error |
+| Ctrl+Z | Undo (up to 40 steps) |
+| Ctrl+D / Ctrl+X | Move right / down (WordStar-style) |
 | Arrows / Home / End | Move cursor |
 | Page Up / Page Down | Move by twelve lines |
-| Backspace / Delete | Remove character or join lines |
-| Enter / Tab | New line / insert four spaces |
-| Esc | Return from help, output or browser to editor |
-| Browser arrows / Enter | Navigate directories and open a source file |
-| Browser Backspace | Go to parent directory |
+| Backspace / Delete | Delete or join lines |
+| Enter / Tab | New line / four spaces |
+| Esc | Return to editor or close menu/browser |
 
-Ctrl+G prompts for a one-based line number and moves the editor cursor
-there without changing the source. F9 shows compile-only diagnostics;
-if the compiler reports a line-numbered error, F8 from the output
-screen jumps to that source line. Invalid or out-of-range line
-numbers are rejected. Runtime errors without a reliable source line
-remain in the output screen without a fabricated location.
+F7 and F8 both perform statement-level stepping: separate
+procedure-level step-into and step-over are not yet supported. F9 and
+Alt+F9 both compile the current source file; a multi-file make/project
+system does not exist.
 
-Breakpoints are marked with an asterisk next to the gutter line number; the
-next paused statement is marked with a greater-than symbol. Set a breakpoint
-with Ctrl+B on valid, compilable source. Ctrl+D asks before starting because
-subsequent execution can modify DBF files. Ctrl+T steps one source statement
-at a time; F6 lets you review output between stops. Ctrl+V opens
-a read-only, alphabetically sorted list of the current VM variables. Breakpoints are cleared
-if you edit the source or open another file. Editing and switching source
-are disabled during a paused debugger session; Ctrl+X cancels remaining
-execution so you can edit again. Cancelling does not undo statements already
-executed, including DBF writes.
+The common modified-key sequences are supported for xterm/Konsole
+terminals, although terminal configurations differ. F10 provides an
+always available letter-driven command menu with equivalent actions.
 
-F2 browses the currently opened source's directory (or current working
-directory for an untitled file). It lists folders and PRG/XABL source
-files but skips symlinks. The browser does not change files; Ctrl+O
-opens a path by name when needed.
+An asterisk marks a breakpoint in the line gutter and a greater-than
+symbol marks the next paused statement. F4 uses a temporary breakpoint
+at the cursor while honouring existing breakpoints. Ctrl+F9 executes
+normally without breakpoints, or starts/continues debugging when
+breakpoints are enabled. Ctrl+F7 displays sorted, read-only variables
+while paused. It does not implement watch expressions.
 
-The editor prompts before discarding unsaved text. Saves first write a
-sibling staging file, then replace the target on successful completion.
-It refuses to replace symbolic links; it does not promise fsync-based
-crash durability or cross-device transaction safety.
+Ctrl+G accepts a one-based source line. Ctrl+E or F12 jumps to the last
+numbered compiler error. F3 browses the source directory (or current
+directory for untitled sources), skipping symlinks. Ctrl+O opens a
+specific path. Editing changes clear line-based breakpoints.
+
+The editor prompts before discarding unsaved text. Saving uses a sibling
+staging file and refuses symlink replacements, but does not promise
+crash-proof or cross-device transactional writes.
 
 ## Runtime and data safety
 
-**F5 actually executes the program** and may modify DBF files through
-APPEND/REPLACE/DELETE/RECALL; Text Studio asks before executing. F9 checks
-syntax only. Debugger statements only execute after an explicit Ctrl+D/Ctrl+T
-and start confirmation. The working directory of a saved program is the
-parent of the opened file, as in the command-line runner. An untitled program runs
-relative to the process's current directory.
+Ctrl+F9, F4, F7 and F8 may execute database-writing statements such as
+APPEND, REPLACE, DELETE and RECALL. They require a confirmation when
+starting execution. F9 and Alt+F9 compile only; setting a breakpoint
+does not execute code. Stopping the debugger cannot undo DBF writes.
 
-The DBF runtime is still single-writer only. Do not test against live,
-shared, or valuable production DBF/NDX files. The GUI frontend should
-eventually share this execution model and locking policy.
+Saving a source sets its parent directory as the working directory
+for execution. Untitled sources run relative to the current process
+directory. While paused, source editing, opening, compiling and saving
+are disabled until the debugger ends or is reset, preventing stale
+compiled code. Do not use valuable or shared DBF files while debugging;
+the DBF runtime is currently single-writer.
 
 ## Known preview limitations
 
@@ -118,19 +122,8 @@ eventually share this execution model and locking policy.
 
 ## Tests
 
-`xabl_text_editor` covers file IO (including CRLF), cursors, search,
-undo, insert/delete and safe-save failure. `xabl_tui_pty` launches the
-actual curses program under a pseudo-terminal and verifies F9 compilation,
-F5 execution, F6 navigation, Ctrl+S saving and Ctrl+Q exit using only a
-throwaway arithmetic script. The same PTY suite also checks pause,
-step, continue, stop and the locked editor using disposable arithmetic
-source. The test suite never opens user databases.
-
-Independent syntax-highlighting and file-browser suites validate the
-presentation lexer and read-only filesystem navigation model without
-requiring an interactive terminal.
-
-The headless editor tests check valid and invalid line navigation,
-including integer overflow in diagnostic strings. The terminal PTY
-test checks Ctrl+G and F8 error navigation against a throwaway invalid
-PRG without executing that invalid program.
+The existing xabl_text_editor, xabl_debugger and xabl_tui_pty suites
+cover the editor model, VM and actual terminal interaction. The PTY
+test uses disposable arithmetic source and checks Borland-style keys,
+debugger stepping, menu access and read-only variable inspection.
+No additional keyboard test suite was introduced.

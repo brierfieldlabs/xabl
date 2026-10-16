@@ -12,6 +12,7 @@
 #include <curses.h>
 #include <algorithm>
 #include <charconv>
+#include <cctype>
 #include <array>
 #include <clocale>
 #include <filesystem>
@@ -33,6 +34,16 @@
 
 namespace fs = std::filesystem;
 namespace {
+// Usual xterm/Konsole modified-function-key sequences. If a terminal
+// cannot transmit them, the F10 command menu offers the same operations.
+constexpr int key_reset = KEY_MAX + 1;
+constexpr int key_breakpoint = KEY_MAX + 2;
+constexpr int key_run = KEY_MAX + 3;
+constexpr int key_variables = KEY_MAX + 4;
+constexpr int key_output = KEY_MAX + 5;
+constexpr int key_compile = KEY_MAX + 6;
+constexpr int key_exit = KEY_MAX + 7;
+
 class CursesSession {
 public:
     CursesSession() {
@@ -41,6 +52,17 @@ public:
         noecho();
         keypad(stdscr, TRUE);
         curs_set(1);
+#ifdef NCURSES_VERSION
+        define_key("\033[1;5Q", key_reset);    // Ctrl+F2
+        define_key("\033[12;5~", key_reset);   // alternate F2 encoding
+        define_key("\033[19;5~", key_breakpoint); // Ctrl+F8
+        define_key("\033[20;5~", key_run);     // Ctrl+F9
+        define_key("\033[18;5~", key_variables); // Ctrl+F7
+        define_key("\033[15;3~", key_output);  // Alt+F5
+        define_key("\033[20;3~", key_compile); // Alt+F9
+        define_key("\033x", key_exit);         // Alt+X
+        define_key("\033X", key_exit);
+#endif
 #if defined(__unix__) || defined(__APPLE__)
         // Let the IDE receive Ctrl+S/Q (otherwise XOFF/XON) and Ctrl+Z
         // (otherwise terminal suspend). Curses restores the original
@@ -95,7 +117,7 @@ public:
     }
 
 private:
-    enum class Mode { Editor, Output, Help, Browser, Variables };
+    enum class Mode { Editor, Output, Help, Browser, Variables, Menu };
     xabl::tui::EditorBuffer document_;
     std::unique_ptr<xabl::tui::FileBrowser> browser_;
     std::size_t browser_scroll_{};
@@ -114,6 +136,7 @@ private:
     std::unique_ptr<xabl::BreakpointMap> debug_breakpoints_;
     std::unique_ptr<xabl::Vm> debug_vm_;
     bool active_{true};
+    bool zoomed_{false};
 
     [[nodiscard]] bool debugging() const noexcept {
         return debug_vm_ && debug_vm_->debugging();
@@ -213,7 +236,7 @@ private:
         if (width < 45 || height < 12) {
             bar(0, "XABL TEXT STUDIO", 2);
             paint(2, 2, "Enlarge terminal (minimum 45x12).", width - 4);
-            paint(height - 1, 1, "F10 Exit", width - 2);
+            paint(height - 1, 1, "Alt+X Exit | F10 Menu", width - 2);
             refresh();
             return;
         }
@@ -222,16 +245,21 @@ private:
         heading += mode_ == Mode::Editor ? "EDITOR" :
                    mode_ == Mode::Output ? "PROGRAM OUTPUT" :
                    mode_ == Mode::Browser ? "FILE BROWSER" :
-                   mode_ == Mode::Variables ? "DEBUG VARIABLES" : "HELP";
-        bar(0, heading, 2);
+                   mode_ == Mode::Variables ? "DEBUG VARIABLES" :
+                   mode_ == Mode::Menu ? "MENU" : "HELP";
+        const bool expanded = zoomed_ && mode_ == Mode::Editor;
+        if (!expanded) bar(0, heading, 2);
 
         const std::string filename = document_.path().empty()
             ? "UNTITLED.PRG" : document_.path().string();
-        bar(1, mode_ == Mode::Browser && browser_
-            ? " Directory: " + safe_title(browser_->directory().string())
-            : " File: " + safe_title(filename) + (document_.dirty() ? "  [Modified]" : ""), 1);
+        if (!expanded)
+            bar(1, mode_ == Mode::Browser && browser_
+                ? " Directory: " + safe_title(browser_->directory().string())
+                : " File: " + safe_title(filename) +
+                  (document_.dirty() ? "  [Modified]" : ""), 1);
 
-        const int viewport_rows = height - 5;
+        const int top = expanded ? 0 : editor_top;
+        const int viewport_rows = height - (expanded ? 3 : 5);
         const int viewport_width = width - gutter_width - 1;
         attrset(COLOR_PAIR(mode_ == Mode::Output || mode_ == Mode::Variables
                                ? 4 : 1));
@@ -251,11 +279,11 @@ private:
                       << (current ? '>' : '|');
                 if (current) attron(A_BOLD);
                 else attron(A_DIM);
-                paint(editor_top + visible, 0, label.str(), gutter_width);
+                paint(top + visible, 0, label.str(), gutter_width);
                 if (current) attroff(A_BOLD);
                 else attroff(A_DIM);
                 const auto& source = document_.lines()[index];
-                paint_source(editor_top + visible, source, viewport_width);
+                paint_source(top + visible, source, viewport_width);
             }
         } else if (mode_ == Mode::Browser && browser_) {
             const auto& entries = browser_->entries();
@@ -270,22 +298,22 @@ private:
                 if (selected >= entries.size()) break;
                 const bool active = selected == browser_->selected();
                 attrset(COLOR_PAIR(active ? 2 : 1) | (active ? A_BOLD : 0));
-                mvhline(editor_top + visible, 0, ' ', width);
-                paint(editor_top + visible, 2, entries[selected].display_name, width - 4);
+                mvhline(top + visible, 0, ' ', width);
+                paint(top + visible, 2, entries[selected].display_name, width - 4);
             }
             attrset(COLOR_PAIR(1));
         } else {
             std::vector<std::string> rows;
             std::istringstream stream(mode_ == Mode::Output ? output_ :
                                        mode_ == Mode::Variables ? variables_text() :
-                                       help_text());
+                                       mode_ == Mode::Menu ? menu_text() : help_text());
             std::string line;
             while (std::getline(stream, line)) rows.push_back(line);
             output_scroll_ = std::min(output_scroll_, rows.size());
             for (int visible = 0; visible < viewport_rows; ++visible) {
                 const auto row = output_scroll_ + static_cast<std::size_t>(visible);
                 if (row < rows.size())
-                    paint(editor_top + visible, 2, rows[row], width - 4);
+                    paint(top + visible, 2, rows[row], width - 4);
             }
         }
 
@@ -293,7 +321,8 @@ private:
         status << " " << (mode_ == Mode::Editor ? "Edit" :
                            mode_ == Mode::Output ? "Output" :
                            mode_ == Mode::Browser ? "Browse" :
-                           mode_ == Mode::Variables ? "Variables" : "Help")
+                           mode_ == Mode::Variables ? "Variables" :
+                           mode_ == Mode::Menu ? "Menu" : "Help")
                << "  Line " << document_.cursor().row + 1
                << "  Col " << document_.cursor().column + 1
                << "  " << document_.lines().size() << " lines"
@@ -305,15 +334,13 @@ private:
         bar(height - 2, " " + message_, 1);
         bar(height - 1,
             mode_ == Mode::Browser
-                ? " Arrows Move  Enter Open  Backspace Parent  Ctrl+O Path  Esc Editor"
-                : debugging()
-                    ? " Ctrl+B Break  Ctrl+T Step  Ctrl+D Continue  Ctrl+V Vars  Ctrl+X Stop  F6 Output"
-                    : " F1 Help F2 Files F3 New F4 Save F5 Run F6 Out F9 Check F10 Exit | ^B BP ^D Debug ^T Step ^X Stop",
+                ? " Arrows Move Enter Open Backspace Parent Esc Editor"
+                : " F1 Help F2 Save F3 Open F4 Cursor F5 Zoom F6 Out F7 Trace F8 Step F9 Build F10 Menu",
             2);
         if (mode_ == Mode::Editor) {
             curs_set(1);
             const auto cursor = document_.cursor();
-            move(static_cast<int>(cursor.row - scroll_row_) + editor_top,
+            move(static_cast<int>(cursor.row - scroll_row_) + top,
                  static_cast<int>(cursor.column - scroll_column_) + gutter_width);
         } else {
             curs_set(0);
@@ -324,38 +351,40 @@ private:
 
     static std::string help_text() {
         return
-            "XABL TEXT STUDIO   |   DOS-inspired keyboard IDE\n"
+            "XABL TEXT STUDIO | Borland-inspired shortcuts\n"
             "\n"
-            " F1       Toggle this help screen\n"
-            " F2       Browse source files and directories\n"
-            " Ctrl+O   Open source by typing a path\n"
-            " Ctrl+G   Go to a numbered source line\n"
-            " F3       New source file (asks before discarding changes)\n"
-            " F4       Save source file (Ctrl+S also works)\n"
-            " F5       Compile and run the source in shared XABL VM\n"
-            " F6       Toggle the program output / editor screen\n"
-            " F7       Find text (Ctrl+F); F8 next or error jump\n"
-            " F9       Check syntax without executing any commands\n"
-            " Ctrl+B   Toggle a breakpoint on an executable line\n"
-            " Ctrl+D   Start debugging / continue to next breakpoint\n"
-            " Ctrl+T   Execute one source statement (step)\n"
-            " Ctrl+V   Inspect current variables while paused\n"
-            " Ctrl+X   Stop debugging (does not undo DBF writes)\n"
-            " F10      Exit (Ctrl+Q also works)\n"
-            " Ctrl+Z   Undo recent edit\n"
-            " Arrows   Navigate; Home/End and PgUp/PgDn supported\n"
-            " Enter    New line; Tab inserts four spaces\n"
-            " Esc      Return to the editor (and close browser)\n"
+            " F1 Help                 F2 Save            F3 Browse/Open\n"
+            " Ctrl+N New              F4 Run to cursor   F5 Zoom editor\n"
+            " F6 Output/editor        F7 Trace          F8 Step\n"
+            " F9 Build/check          Alt+F9 Compile    F10 Menu\n"
+            " Ctrl+F9 Run/continue    Ctrl+F2 Reset     Ctrl+F8 Breakpoint\n"
+            " Ctrl+F7 Variables       Alt+F5 Output     Alt+X Exit\n"
+            " Ctrl+O Open path        Ctrl+F Find       Ctrl+G Go to line\n"
+            " Ctrl+E/F12 Error jump   Ctrl+S Save       Ctrl+Z Undo\n"
+            " Ctrl+Q Exit             Esc Back to editor\n"
             "\n"
-            "F5 and debugger step/continue can write DBF files.\n"
-            "Starting debug asks permission; compiling and breakpoints do not run.\n"
-            "The editor is read-only while debugger execution is paused.\n"
-            "Ctrl+X stops future instructions; prior DBF writes remain.\n"
-            "Gutter: * breakpoint, > next paused statement.\n"
+            " F7 and F8 both step ONE SOURCE STATEMENT for now.\n"
+            " Procedure step-into/step-over distinction is not implemented.\n"
+            " F9 and Alt+F9 both check the one active source file.\n"
+            " If modified function keys do not work, use F10's command menu.\n"
             "\n"
-            "Current scope: ASCII-oriented terminal editing, <= 1 MiB.\n"
-            "Files preserve CRLF when opened from DOS/Windows sources.\n"
-            "No DOS emulation or native DOS binary is implied.\n";
+            " Run/step may write DBF data; reset does NOT undo prior writes.\n"
+            " Gutter: * breakpoint, > next paused statement.\n";
+    }
+
+    static std::string menu_text() {
+        return
+            "XABL COMMAND MENU | Press a letter (Esc closes)\n"
+            "\n"
+            " FILE       S Save       O Browse/Open    P Open path   N New\n"
+            " BUILD      C Check      R Run/Continue\n"
+            " DEBUG      B Breakpoint T Step           G Run to cursor\n"
+            "            V Variables D Stop/Reset\n"
+            " VIEW       U Output     Z Zoom           H Help\n"
+            " NAVIGATE   F Find       L Go to line     E Compiler error\n"
+            " EXIT       X Quit\n"
+            "\n"
+            " Works when the terminal cannot send modified function keys.\n";
     }
 
     std::string prompt(std::string_view question) {
@@ -539,7 +568,7 @@ private:
         message_ = "Breakpoint set on line " + std::to_string(line);
     }
 
-    void debug(bool step) {
+    void debug(bool step, std::optional<std::size_t> run_to_line = std::nullopt) {
         if (!debugging()) {
             if (!confirm("Start debugging? Program statements may change DBF files."))
                 return;
@@ -564,8 +593,19 @@ private:
             }
         }
         try {
+            // A run-to-cursor breakpoint is temporary. Keep pre-existing
+            // breakpoints enabled when the cursor is on one of them.
+            bool temporary = false;
+            if (run_to_line) {
+                if (!debug_breakpoints_->instruction_at(*run_to_line)) {
+                    message_ = "Cursor line has no executable statement.";
+                    return;
+                }
+                temporary = debug_breakpoints_->enable(*run_to_line);
+            }
             const auto reason = step ? debug_vm_->step()
                                      : debug_vm_->resume(*debug_breakpoints_);
+            if (temporary) debug_breakpoints_->disable(*run_to_line);
             output_ = debug_output_.str();
             output_scroll_ = 0;
             if (reason == xabl::DebugStop::Finished) {
@@ -582,7 +622,7 @@ private:
                 message_ = std::string(reason == xabl::DebugStop::Breakpoint
                               ? "Breakpoint before line " : "Stepped to line ")
                          + std::to_string(location->line)
-                         + ". Ctrl+T step, Ctrl+D continue, Ctrl+X stop.";
+                         + ". F7/F8 step; Ctrl+F9 continue; Ctrl+F2 stop.";
             } else {
                 mode_ = Mode::Editor;
                 message_ = "Debugger paused before unsourced bytecode.";
@@ -603,7 +643,7 @@ private:
         mode_ = mode_ == Mode::Variables ? Mode::Editor : Mode::Variables;
         output_scroll_ = 0;
         message_ = mode_ == Mode::Variables
-            ? "Variables are read-only. Ctrl+V or Esc returns to the editor."
+            ? "Variables are read-only. Ctrl+F7 or Esc returns to the editor."
             : "Returned to editor.";
     }
 
@@ -656,7 +696,7 @@ private:
         mode_ = Mode::Output;
         message_ = last_compile_error_line_
             ? "Syntax error at line " + std::to_string(*last_compile_error_line_) +
-              ". F8 jumps there."
+              ". F12 or Ctrl+E jumps there."
             : (execute ? "Program output. F6 to return." :
                          "Syntax check. F6 to return.");
     }
@@ -667,7 +707,7 @@ private:
             if (last_search_.empty()) return;
         }
         if (last_search_.empty()) {
-            message_ = "F7 to enter search text.";
+            message_ = "Ctrl+F to enter search text.";
             return;
         }
         mode_ = Mode::Editor;
@@ -675,50 +715,100 @@ private:
             ? "Found: " + last_search_ : "Not found: " + last_search_;
     }
 
+    void run_or_continue() {
+        if (debugging() || !breakpoint_lines_.empty()) {
+            debug(false);
+        } else if (confirm("Run source? It may write database files.")) {
+            compile(true);
+        }
+    }
+
     void handle(int key) {
         if (key == ERR) return;
         if (mode_ == Mode::Browser) {
-            if (key == KEY_F(10) || key == ctrl('Q')) {
+            if (key == KEY_F(10)) {
+                browser_.reset();
+                mode_ = Mode::Menu;
+            } else if (key == key_exit || key == ctrl('Q')) {
                 if (discard_ok()) active_ = false;
             } else {
                 browse_key(key);
             }
             return;
         }
+        if (mode_ == Mode::Menu) {
+            mode_ = Mode::Editor;
+            switch (std::tolower(static_cast<unsigned char>(key))) {
+            case 's': handle(KEY_F(2)); break;
+            case 'o': handle(KEY_F(3)); break;
+            case 'p': handle(ctrl('O')); break;
+            case 'n': handle(ctrl('N')); break;
+            case 'c': handle(KEY_F(9)); break;
+            case 'r': handle(key_run); break;
+            case 'b': handle(key_breakpoint); break;
+            case 't': handle(KEY_F(8)); break;
+            case 'g': handle(KEY_F(4)); break;
+            case 'v': handle(key_variables); break;
+            case 'd': handle(key_reset); break;
+            case 'u': handle(KEY_F(6)); break;
+            case 'z': handle(KEY_F(5)); break;
+            case 'h': handle(KEY_F(1)); break;
+            case 'f': handle(ctrl('F')); break;
+            case 'l': handle(ctrl('G')); break;
+            case 'e': handle(ctrl('E')); break;
+            case 'x': handle(key_exit); break;
+            case 27: break;
+            default: message_ = "Menu closed."; break;
+            }
+            return;
+        }
+
         if (debugging() &&
-            (key == KEY_F(2) || key == ctrl('O') || key == KEY_F(3) ||
-             key == KEY_F(4) || key == ctrl('S') ||
-             key == KEY_F(5) || key == KEY_F(9))) {
-            message_ = "Ctrl+X stops debugging before opening, saving or compiling.";
+            (key == KEY_F(2) || key == ctrl('S') ||
+             key == KEY_F(3) || key == ctrl('O') || key == ctrl('N') ||
+             key == KEY_F(9) || key == key_compile)) {
+            message_ = "Ctrl+F2 resets debugging before changing or compiling source.";
             return;
         }
         switch (key) {
-        case ctrl('B'): toggle_breakpoint(); return;
-        case ctrl('D'): debug(false); return;
-        case ctrl('T'): debug(true); return;
-        case ctrl('V'): inspect_variables(); return;
-        case ctrl('X'): stop_debugging(); return;
+        case key_breakpoint: toggle_breakpoint(); return;
+        case key_run: run_or_continue(); return;
+        case key_reset: stop_debugging(); return;
+        case key_variables: inspect_variables(); return;
+        case key_output:
+            mode_ = mode_ == Mode::Output ? Mode::Editor : Mode::Output;
+            return;
+        case key_compile: compile(false); return;
         case KEY_F(1):
             mode_ = mode_ == Mode::Help ? Mode::Editor : Mode::Help;
             output_scroll_ = 0;
             return;
-        case KEY_F(2): browse(); return;
-        case ctrl('O'): open(); return;
-        case KEY_F(3): new_document(); return;
-        case KEY_F(4):
+        case KEY_F(2):
         case ctrl('S'): save(); return;
+        case KEY_F(3): browse(); return;
+        case ctrl('O'): open(); return;
+        case ctrl('N'): new_document(); return;
+        case KEY_F(4): debug(false, document_.cursor().row + 1); return;
         case KEY_F(5):
-            if (confirm("Run source? It may write database files.")) compile(true);
+            zoomed_ = !zoomed_;
+            mode_ = Mode::Editor;
+            message_ = zoomed_ ? "Editor zoomed." : "Editor restored.";
             return;
         case KEY_F(6):
             mode_ = mode_ == Mode::Editor ? Mode::Output : Mode::Editor;
             return;
         case KEY_F(7):
+        case KEY_F(8): debug(true); return;
         case ctrl('F'): search(false); return;
-        case KEY_F(8): next_or_error(); return;
+        case KEY_F(12):
+        case ctrl('E'): next_or_error(); return;
         case ctrl('G'): goto_prompt(); return;
         case KEY_F(9): compile(false); return;
         case KEY_F(10):
+            mode_ = mode_ == Mode::Menu ? Mode::Editor : Mode::Menu;
+            output_scroll_ = 0;
+            return;
+        case key_exit:
         case ctrl('Q'):
             if (discard_ok()) active_ = false;
             return;
@@ -742,18 +832,18 @@ private:
         }
         const bool editing = is_edit_key(key);
         if (editing && debugging()) {
-            message_ = "Editor paused: Ctrl+X to stop debugging before editing.";
+            message_ = "Editor paused: Ctrl+F2 to reset before editing.";
             return;
         }
-        // Only clear breakpoints if the source actually changes, not on
-        // no-op Backspace, Delete or Undo.
         const bool track_source = editing && !breakpoint_lines_.empty();
         const std::string prior_source = track_source ? document_.text() : "";
         switch (key) {
         case KEY_UP: document_.move_up(); break;
-        case KEY_DOWN: document_.move_down(); break;
+        case KEY_DOWN:
+        case ctrl('X'): document_.move_down(); break; // WordStar cursor keys
         case KEY_LEFT: document_.move_left(); break;
-        case KEY_RIGHT: document_.move_right(); break;
+        case KEY_RIGHT:
+        case ctrl('D'): document_.move_right(); break;
         case KEY_HOME: document_.home(); break;
         case KEY_END: document_.end(); break;
         case KEY_PPAGE:
@@ -783,6 +873,7 @@ private:
             message_ = "Source changed; breakpoints cleared.";
         }
     }
+
 };
 
 } // namespace
@@ -791,8 +882,9 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
         std::cout << "Usage: xabl-tui [program.prg|program.xabl]\n"
                   << "Terminal IDE (optional ncurses build).\n"
-                  << "F1 Help, F2 Open, F3 New, F4 Save, F5 Run, F6 Output, F9 Check, F10 Exit.\n"
-                  << "Ctrl+B breakpoint, Ctrl+D debug/continue, Ctrl+T step, Ctrl+V variables, Ctrl+X stop.\n";
+                  << "F1 Help, F2 Save, F3 Open, F4 Run to cursor, F5 Zoom, F6 Output,\n"
+                  << "F7 Trace, F8 Step, F9 Build, F10 Menu, Alt+X Exit.\n"
+                  << "Ctrl+F8 Breakpoint, Ctrl+F9 Run, Ctrl+F2 Reset; F10 menu fallback.\n";
         return 0;
     }
     if (argc > 2) {

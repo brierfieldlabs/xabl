@@ -24,3 +24,16 @@ The visual language evokes classic xBase/Turbo Pascal, without copying
 brand graphics or claiming to emulate MS-DOS itself. This layer is
 ASCII-oriented at first; real DOS codepage mapping, multi-document
 management, breakpoint debugging and Qt UI remain separate milestones.
+
+
+## Subsequent status (16 October 2026)
+
+Text Studio now has the shared VM debugger, breakpoint gutter,
+step/continue, variables and Borland-inspired keyboard controls.
+See the user text-studio guide and issue #44.
+
+The original Qt desktop Studio proposal remains recorded above as a
+historical design intention. The later choice of Qt versus modern
+VS Code/Zed editor integrations is **under discussion**, not yet
+decided; track it in GitHub issue #45. Do not treat this old ADR alone
+as an implementation priority overriding that open decision.
