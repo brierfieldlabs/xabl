@@ -10,7 +10,9 @@ columns are one-based; zero means no source location. An instruction currently
 maps to the first non-whitespace byte of its source statement. Lowered
 expression instructions from the same statement share the same source
 coordinates. The compiler attaches these coordinates after it has emitted all
-instructions for a line, using a scoped annotation guard.
+instructions for a logical statement, using a scoped annotation guard.
+A semicolon-continued statement is attributed to its first physical
+source line; continuation-only lines cannot accept a breakpoint.
 
 Control-flow `target` offsets remain unchanged: source information is
 additional metadata, not a replacement for branches. Synthetic HALT does not

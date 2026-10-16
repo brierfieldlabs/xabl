@@ -46,6 +46,60 @@ int main(int argc, char** argv) {
             throw std::runtime_error("quoted comment handling mismatch");
         }
 
+        // Semicolon continuation is resolved after && comments, and
+        // ordinary quoted semicolons are never continuation markers.
+        std::ostringstream continued;
+        xabl::Vm multiline_vm(continued);
+        multiline_vm.run(compiler.compile(
+            "STORE 1 + ; && ignore the rest of this physical line\r\n"
+            "    2 + ;\r\n"
+            "    3 TO total\r\n"
+            "? total\r\n"
+            "STORE 'a;b' TO literal\r\n"
+            "? literal\r\n"
+            "? 'one' + ; && trailing comment\r\n"
+            " * skipped full-line comment\r\n"
+            "  'two'\r\n"
+            "IF total = ;\r\n"
+            "   6\r\n"
+            "? 'yes'\r\n"
+            "ENDIF\r\n"
+            "DO CASE\r\n"
+            " CASE total = ;\r\n"
+            "   6\r\n"
+            "  ? 'match'\r\n"
+            " OTHERWISE\r\n"
+            "  ? 'incorrect'\r\n"
+            "ENDCASE\r\n"), ".");
+        if (continued.str() != "6\na;b\nonetwo\nyes\nmatch\n") {
+            throw std::runtime_error("line continuation output mismatch: " +
+                                     continued.str());
+        }
+
+        for (std::string_view bad : {
+                 "? 1 + ;",             // EOF after trailing continuation
+                 "? 1 + ;\n&& comment",// no next executable source
+                 "  ? 1 + ;\n  BADNAME(3)",
+                 "? 'unterminated;\n? 8"  // quote shields semicolon
+             }) {
+            bool failed = false;
+            try { (void)compiler.compile(bad); }
+            catch (const std::runtime_error&) { failed = true; }
+            if (!failed) {
+                throw std::runtime_error("bad continued source compiled: " +
+                                         std::string(bad));
+            }
+        }
+        try {
+            (void)compiler.compile(
+                "? 5 + ; && comment\n"
+                "    unknown(4)\n");
+            throw std::runtime_error("bad continuation unexpectedly accepted");
+        } catch (const std::runtime_error& ex) {
+            if (std::string(ex.what()).find("line 1:") == std::string::npos)
+                throw;
+        }
+
         try {
             (void)compiler.compile(
                 "NOTE skipped header\n"

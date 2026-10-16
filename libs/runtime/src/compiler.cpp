@@ -43,6 +43,79 @@ std::string without_inline_comment(std::string_view source) {
     return std::string(source);
 }
 
+// A continued statement is one logical source line, even when split across
+// physical PRG lines. Keep its original start position for debugger mapping.
+struct LogicalSourceLine {
+    std::string text;
+    std::size_t line{0};
+    std::size_t column{0};
+};
+
+// Recognise a terminal semicolon only outside quoted strings. Doubled quotes
+// and inline && comments have already been handled by the same source rules
+// used for ordinary, single-line statements.
+bool trailing_continuation(std::string_view source, std::size_t last) {
+    if (source[last] != ';') return false;
+    char quote = 0;
+    for (std::size_t i = 0; i <= last; ++i) {
+        const char c = source[i];
+        if (quote != 0) {
+            if (c == quote) {
+                if (i + 1 <= last && source[i + 1] == quote) {
+                    ++i;
+                } else {
+                    quote = 0;
+                }
+            }
+        } else if (c == '\'' || c == '"') {
+            quote = c;
+        }
+    }
+    return quote == 0;
+}
+
+bool read_statement(std::istream& input, std::size_t& physical_line,
+                    LogicalSourceLine& result) {
+    result = {};
+    std::string raw;
+    bool continued = false;
+    while (std::getline(input, raw)) {
+        ++physical_line;
+        std::string part = without_inline_comment(raw);
+        const std::string stripped = trim(part);
+        // An ignored full-line comment is not part of a continuation.
+        if (stripped.empty() || stripped.front() == '*' ||
+            equal_ci(stripped, "NOTE") || starts_with_ci(stripped, "NOTE ")) {
+            continue;
+        }
+        if (!continued) {
+            result.line = physical_line;
+            const auto first = std::find_if_not(
+                raw.begin(), raw.end(), [](unsigned char c) {
+                    return std::isspace(c) != 0;
+                });
+            result.column = static_cast<std::size_t>(
+                std::distance(raw.begin(), first)) + 1;
+        }
+
+        const auto last = part.find_last_not_of(" \t\r\n");
+        const bool more = last != std::string::npos &&
+                          trailing_continuation(part, last);
+        if (more) part.erase(last, 1);
+        result.text += part;
+        if (!more) {
+            result.text = trim(result.text);
+            return true;
+        }
+        continued = true;
+    }
+    if (continued) {
+        throw std::runtime_error("line " + std::to_string(result.line) +
+                                 ": unfinished semicolon continuation");
+    }
+    return false;
+}
+
 // Locate command separators such as " TO " without mistaking matching
 // words inside strings or nested parenthesised function expressions.
 std::size_t find_command_marker(std::string_view source,
@@ -116,8 +189,8 @@ Program Compiler::compile(std::string_view source) const {
     std::vector<Block> blocks;
 
     std::istringstream input{std::string(source)};
-    std::string raw_line;
-    std::size_t line_number = 0;
+    LogicalSourceLine source_line;
+    std::size_t physical_line = 0;
     std::string last_locate_expression;
 
     const auto emit_locate = [&](const std::string& condition, bool continue_search) {
@@ -163,27 +236,11 @@ Program Compiler::compile(std::string_view source) const {
         program.code[found_jump].target = end;
     };
 
-    while (std::getline(input, raw_line)) {
-        ++line_number;
-        std::string line = trim(without_inline_comment(raw_line));
-
-        if (line.empty() || line.front() == '*' ||
-            equal_ci(line, "NOTE") || starts_with_ci(line, "NOTE ")) {
-            continue;
-        }
-
-        // Coordinates refer to the original buffer, before trimming or
-        // stripping inline comments. CRLF is handled by the existing reader.
-        const auto first_non_space = std::find_if_not(
-            raw_line.begin(), raw_line.end(), [](unsigned char ch) {
-                return std::isspace(ch) != 0;
-            });
-        const auto column = static_cast<std::size_t>(
-            std::distance(raw_line.begin(), first_non_space)) + 1;
-
+    while (read_statement(input, physical_line, source_line)) {
+        const std::string& line = source_line.text;
         try {
             StatementSourceScope statement{program, program.code.size(),
-                                           {line_number, column}};
+                                           {source_line.line, source_line.column}};
             if (equal_ci(line, "USE")) {
                 program.code.push_back({OpCode::CloseTable});
                 continue;
@@ -243,7 +300,7 @@ Program Compiler::compile(std::string_view source) const {
                     ExpressionCompiler filter_compiler{*filter_program};
                     filter_compiler.emit(condition);
                     for (auto& emitted : filter_program->code) {
-                        emitted.source = {line_number, column};
+                        emitted.source = {source_line.line, source_line.column};
                     }
                     filter_program->code.push_back({OpCode::Halt});
                     instruction.embedded_program = std::move(filter_program);
@@ -525,7 +582,7 @@ Program Compiler::compile(std::string_view source) const {
             throw std::runtime_error("unsupported statement: " + line);
         } catch (const std::exception& ex) {
             throw std::runtime_error(
-                "line " + std::to_string(line_number) + ": " + ex.what());
+                "line " + std::to_string(source_line.line) + ": " + ex.what());
         }
     }
 

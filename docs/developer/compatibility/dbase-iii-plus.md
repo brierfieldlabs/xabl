@@ -10,7 +10,11 @@ independent original-product reference files are still outstanding.
 - PRG line comments starting with `*`, `NOTE` and `&&`; inline
   `&&` comments are stripped without damaging quoted literals. Bare
   `?` prints a blank line, while `?expression` works without a space.
-  Semicolon line continuation remains unimplemented.
+  Trailing semicolons outside quoted literals continue a statement
+  onto following physical lines, including before a trailing inline
+  && comment. Continuation-only lines do not create new breakpoint
+  locations. Multiple statements separated by semicolons on one
+  physical line remain separate future compatibility work.
 - STORE TO, REPLACE WITH and USE ALIAS separators are now recognised
   outside quoted character expressions and parenthesised calls; embedded
   keyword text is retained as a literal, not a spurious clause.

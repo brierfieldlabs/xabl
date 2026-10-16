@@ -72,7 +72,9 @@ terminals, although terminal configurations differ. F10 provides an
 always available letter-driven command menu with equivalent actions.
 
 An asterisk marks a breakpoint in the line gutter and a greater-than
-symbol marks the next paused statement. F4 uses a temporary breakpoint
+symbol marks the next paused statement. A multiline statement continued
+with a terminal semicolon has its executable breakpoint on the **first**
+physical line, not its continuation-only lines. F4 uses a temporary breakpoint
 at the cursor while honouring existing breakpoints. Ctrl+F9 executes
 normally without breakpoints, or starts/continues debugging when
 breakpoints are enabled. Ctrl+F7 displays sorted, read-only variables
