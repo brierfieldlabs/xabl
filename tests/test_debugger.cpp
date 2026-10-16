@@ -100,6 +100,38 @@ void test_mapping_and_breakpoints() {
           "invalid requests must not mutate breakpoint state");
 }
 
+void test_multiline_statement_locations() {
+    const auto program = xabl::Compiler{}.compile(
+        "  STORE 2 + ; && arithmetic continues\r\n"
+        "      4 TO n\r\n"
+        "? n\r\n");
+    xabl::BreakpointMap lines(program);
+    check(lines.executable_lines() ==
+              std::vector<std::size_t>({1, 3}),
+          "continued statement should have one executable source origin");
+    check(!lines.instruction_at(2),
+          "continuation-only physical line must not become a breakpoint");
+    check(program.code[*lines.instruction_at(1)].source.column == 3,
+          "continued statement start column changed");
+    std::ostringstream output;
+    xabl::Vm vm(output);
+    vm.run(program, ".");
+    check(output.str() == "6\n", "continued program did not execute normally");
+
+    // SET FILTER compiles an embedded expression even without an open
+    // table. Inspect the mapping only: execution legitimately needs a DBF.
+    const auto filter_program = xabl::Compiler{}.compile(
+        "SET FILTER TO n > ; && embedded expression continues\r\n"
+        "     2\r\n");
+    const xabl::BreakpointMap filter_lines(filter_program);
+    check(filter_lines.executable_lines() ==
+              std::vector<std::size_t>({1}),
+          "continued filter source incorrectly spans breakpoint lines");
+    const auto filter = filter_program.code[0].embedded_program;
+    check(filter && filter->code[0].source.line == 1,
+          "continued SET FILTER lost embedded source origin");
+}
+
 void test_embedded_program_and_unsourced_bytecode() {
     const auto program = xabl::Compiler{}.compile(
         "SET FILTER TO n > 1\n? 7\n");
@@ -335,6 +367,7 @@ int main(int argc, char** argv) {
     if (argc != 2) return 2;
     try {
         test_mapping_and_breakpoints();
+        test_multiline_statement_locations();
         test_embedded_program_and_unsourced_bytecode();
         test_resumable_vm_execution();
         test_loop_breakpoints_are_revisited();

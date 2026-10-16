@@ -38,8 +38,10 @@ source after the compiler has lowered an expression or rewritten control flow.
 - An `ELSE` has a jump instruction only on the true branch. `ENDIF` emits
   no instruction. A source breakpoint must therefore not promise a stop for
   every visually present control-flow keyword.
-- The current language subset has one compiled statement per physical line.
-  Future multi-line statements and macros will need source-span mapping.
+- Continued multi-line source statements are mapped to their first
+  physical line and column, so users can set a breakpoint on the
+  command beginning rather than a continuation-only line. Future
+  macro expansion and arbitrary source spans will need richer mapping.
 - Offsets in the debugger map are only valid for the bytecode used to
   construct it. No persisted bytecode format or compatibility guarantee is
   implied.

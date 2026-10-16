@@ -22,4 +22,22 @@ targeted correction, not a complete statement grammar or macro parser.
 
 New regression cases cover quoted TO, doubled quote escapes, TO inside
 UPPER() and a quoted WITH in a REPLACE value, including DBF persistence.
-Macro substitution and semicolon continuation remain future parser work.
+Macro substitution and same-line semicolon statement separation remain
+future parser work.
+
+## Follow-up: terminal semicolon continuation (16 October 2026)
+
+A small logical-line reader now joins source lines when a semicolon is
+the last non-comment, non-whitespace character **outside a string**.
+It checks for inline && comments using the existing doubled-quote-aware
+scanner. The first physical line/column remains the source location for
+a compiled statement, including embedded expression bytecode and
+compiler errors; subsequent continuation-only physical lines are not
+new breakpoint targets.
+
+Full-line comments and blank lines are ignored during continuation;
+quoted semicolons do not continue a statement. Unterminated
+continuation at end of file produces an explicit compiler error.
+The original dBASE III PLUS NOTE/* comment-continuation variation
+and same-line semicolon command separation remain unimplemented and
+tracked by issue #52. The change does not introduce a second parser.
