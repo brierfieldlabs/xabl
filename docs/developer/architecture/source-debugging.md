@@ -86,3 +86,22 @@ visible paused-line indicator, variable inspection and a deliberate run
 confirmation before any writable script executes. There is no frontend
 debugger integration yet. Source mapping does not claim equivalence to the
 historical dBASE debugger and does not implement macro/source-span tracking.
+
+
+## Text Studio keyboard integration (16 October 2026)
+
+Text Studio uses the shared VM and BreakpointMap directly. Ctrl+B toggles
+breakpoints on executable source lines, Ctrl+D begins/continues execution,
+Ctrl+T steps one statement, and Ctrl+X discards remaining execution.
+It uses the editor's current source buffer; no separate project, event loop,
+or debugger service is introduced. F5 Run and F9 Check are unchanged.
+
+Paused statement and breakpoint gutter markers are visible; runtime output
+remains available with F6. Editing/opening another source is unavailable
+while paused; cancellation releases that lock. On a source edit, numbered
+breakpoints are cleared to avoid stale line offsets. The existing PTY
+integration test covers the keyboard controls.
+
+The curses frontend remains synchronous: continuing into a long-running
+program does not provide asynchronous interruption. Production/shared DBF
+debugging is not recommended because runtime writes are not transactional.

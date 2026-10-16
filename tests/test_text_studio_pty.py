@@ -98,6 +98,53 @@ def main() -> int:
             send(b"* harmless note\n")
             send(b"\x13")
             wait_for(b"Saved ")
+            # Exercise the debugger in the existing terminal PTY suite.
+            debug_source = Path(directory) / "debug.prg"
+            debug_source.write_bytes(b"STORE 0 TO n\nn = n + 1\n? n\n")
+            debug_open = len(transcript)
+            send(b"\x0f")  # Ctrl+O
+            wait_for(b"Open source file", since=debug_open)
+            send(os.fsencode(debug_source) + b"\r")
+            wait_for(b"Opened ")
+            jump_mark = len(transcript)
+            send(b"\x07")  # Ctrl+G
+            wait_for(b"Go to line", since=jump_mark)
+            send(b"2\r")
+            wait_for(b"Line 2", since=jump_mark)
+            bp_mark = len(transcript)
+            send(b"\x02")  # Ctrl+B
+            wait_for(b"Breakpoint set on line 2", since=bp_mark)
+            debug_mark = len(transcript)
+            send(b"\x04")  # Ctrl+D
+            wait_for(b"Start debugging?", since=debug_mark)
+            send(b"y")
+            wait_for(b"Breakpoint before line 2", since=debug_mark)
+            locked_mark = len(transcript)
+            send(b"x")  # Editing paused source must be refused.
+            wait_for(b"Editor paused", since=locked_mark)
+            step_mark = len(transcript)
+            send(b"\x14")  # Ctrl+T
+            wait_for(b"Stepped to line 3", since=step_mark)
+            done_mark = len(transcript)
+            send(b"\x04")  # Ctrl+D: complete
+            wait_for(b"Program completed.", since=done_mark)
+            if debug_source.read_bytes() != b"STORE 0 TO n\nn = n + 1\n? n\n":
+                raise AssertionError("Debugging changed the source file")
+            send(b"\x1b[17~")  # F6: editor
+            wait_for(b"EDITOR")
+            # Revisit breakpoint, then cancel without changing the file.
+            restart_mark = len(transcript)
+            send(b"\x04")
+            wait_for(b"Start debugging?", since=restart_mark)
+            send(b"y")
+            wait_for(b"Breakpoint before line 2", since=restart_mark)
+            stop_mark = len(transcript)
+            send(b"\x18")  # Ctrl+X: cancel paused run
+            wait_for(b"Debugger stopped.", since=stop_mark)
+            undo_mark = len(transcript)
+            send(b"\x1a")  # Ctrl+Z now works, not locked by debugger
+            wait_for(b"Nothing to undo", since=undo_mark)
+
             faulty.write_bytes(b"? 2 + 3\nUNKNOWN COMMAND\n")
             # Load an invalid program to verify F9 stays compile-only and
             # F8 jumps from the diagnostics view to the right source line.
