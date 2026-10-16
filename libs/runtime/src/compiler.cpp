@@ -298,13 +298,14 @@ Program Compiler::compile(std::string_view source) const {
                 continue;
             }
 
-            if (equal_ci(line, "GO TOP")) {
+            if (equal_ci(line, "GO TOP") || equal_ci(line, "GOTO TOP")) {
                 program.code.push_back({OpCode::GoTop});
                 continue;
             }
 
-            if (starts_with_ci(line, "GO ") && !equal_ci(line, "GO TOP")) {
-                expression_compiler.emit(line.substr(3));
+            if (starts_with_ci(line, "GO ") || starts_with_ci(line, "GOTO ")) {
+                expression_compiler.emit(
+                    line.substr(starts_with_ci(line, "GOTO ") ? 5 : 3));
                 program.code.push_back({OpCode::GoRecord});
                 continue;
             }
