@@ -92,7 +92,9 @@ historical dBASE debugger and does not implement macro/source-span tracking.
 
 Text Studio uses the shared VM and BreakpointMap directly. Ctrl+B toggles
 breakpoints on executable source lines, Ctrl+D begins/continues execution,
-Ctrl+T steps one statement, and Ctrl+X discards remaining execution.
+Ctrl+T steps one statement, Ctrl+V shows a read-only sorted variable
+view using the existing output viewport, and Ctrl+X discards remaining
+execution.
 It uses the editor's current source buffer; no separate project, event loop,
 or debugger service is introduced. F5 Run and F9 Check are unchanged.
 

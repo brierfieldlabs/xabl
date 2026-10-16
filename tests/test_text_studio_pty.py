@@ -119,12 +119,21 @@ def main() -> int:
             wait_for(b"Start debugging?", since=debug_mark)
             send(b"y")
             wait_for(b"Breakpoint before line 2", since=debug_mark)
+            vars_mark = len(transcript)
+            send(b"\x16")  # Ctrl+V: read-only variables
+            wait_for(b"DEBUG VARIABLES", since=vars_mark)
+            wait_for(b"N = 0", since=vars_mark)
+            send(b"\x16")  # return to source editor
             locked_mark = len(transcript)
             send(b"x")  # Editing paused source must be refused.
             wait_for(b"Editor paused", since=locked_mark)
             step_mark = len(transcript)
             send(b"\x14")  # Ctrl+T
             wait_for(b"Stepped to line 3", since=step_mark)
+            vars_mark = len(transcript)
+            send(b"\x16")
+            wait_for(b"N = 1", since=vars_mark)
+            send(b"\x16")
             done_mark = len(transcript)
             send(b"\x04")  # Ctrl+D: complete
             wait_for(b"Program completed.", since=done_mark)

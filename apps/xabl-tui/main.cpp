@@ -23,6 +23,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #if defined(__unix__) || defined(__APPLE__)
@@ -94,7 +95,7 @@ public:
     }
 
 private:
-    enum class Mode { Editor, Output, Help, Browser };
+    enum class Mode { Editor, Output, Help, Browser, Variables };
     xabl::tui::EditorBuffer document_;
     std::unique_ptr<xabl::tui::FileBrowser> browser_;
     std::size_t browser_scroll_{};
@@ -137,6 +138,19 @@ private:
             if (byte < 32 || byte == 127) character = '?';
         }
         return title;
+    }
+
+    std::string variables_text() const {
+        if (!debugging()) return "No active debugger session.\n";
+        std::vector<std::pair<std::string, std::string>> rows;
+        for (const auto& [name, value] : debug_vm_->variables())
+            rows.emplace_back(name, safe_title(value.as_string()));
+        std::sort(rows.begin(), rows.end());
+        std::ostringstream view;
+        view << "Variables (" << rows.size() << ")\n\n";
+        for (const auto& [name, value] : rows)
+            view << name << " = " << value << '\n';
+        return view.str();
     }
 
     void paint_source(int y, const std::string& source, int width) {
@@ -207,7 +221,8 @@ private:
         std::string heading = " XABL Text Studio  |  ";
         heading += mode_ == Mode::Editor ? "EDITOR" :
                    mode_ == Mode::Output ? "PROGRAM OUTPUT" :
-                   mode_ == Mode::Browser ? "FILE BROWSER" : "HELP";
+                   mode_ == Mode::Browser ? "FILE BROWSER" :
+                   mode_ == Mode::Variables ? "DEBUG VARIABLES" : "HELP";
         bar(0, heading, 2);
 
         const std::string filename = document_.path().empty()
@@ -218,7 +233,8 @@ private:
 
         const int viewport_rows = height - 5;
         const int viewport_width = width - gutter_width - 1;
-        attrset(COLOR_PAIR(mode_ == Mode::Output ? 4 : 1));
+        attrset(COLOR_PAIR(mode_ == Mode::Output || mode_ == Mode::Variables
+                               ? 4 : 1));
 
         if (mode_ == Mode::Editor) {
             ensure_visible(viewport_rows, viewport_width);
@@ -260,7 +276,9 @@ private:
             attrset(COLOR_PAIR(1));
         } else {
             std::vector<std::string> rows;
-            std::istringstream stream(mode_ == Mode::Output ? output_ : help_text());
+            std::istringstream stream(mode_ == Mode::Output ? output_ :
+                                       mode_ == Mode::Variables ? variables_text() :
+                                       help_text());
             std::string line;
             while (std::getline(stream, line)) rows.push_back(line);
             output_scroll_ = std::min(output_scroll_, rows.size());
@@ -274,7 +292,8 @@ private:
         std::ostringstream status;
         status << " " << (mode_ == Mode::Editor ? "Edit" :
                            mode_ == Mode::Output ? "Output" :
-                           mode_ == Mode::Browser ? "Browse" : "Help")
+                           mode_ == Mode::Browser ? "Browse" :
+                           mode_ == Mode::Variables ? "Variables" : "Help")
                << "  Line " << document_.cursor().row + 1
                << "  Col " << document_.cursor().column + 1
                << "  " << document_.lines().size() << " lines"
@@ -288,7 +307,7 @@ private:
             mode_ == Mode::Browser
                 ? " Arrows Move  Enter Open  Backspace Parent  Ctrl+O Path  Esc Editor"
                 : debugging()
-                    ? " Ctrl+B Breakpoint   Ctrl+T Step   Ctrl+D Continue   Ctrl+X Stop   F6 Output"
+                    ? " Ctrl+B Break  Ctrl+T Step  Ctrl+D Continue  Ctrl+V Vars  Ctrl+X Stop  F6 Output"
                     : " F1 Help F2 Files F3 New F4 Save F5 Run F6 Out F9 Check F10 Exit | ^B BP ^D Debug ^T Step ^X Stop",
             2);
         if (mode_ == Mode::Editor) {
@@ -320,6 +339,7 @@ private:
             " Ctrl+B   Toggle a breakpoint on an executable line\n"
             " Ctrl+D   Start debugging / continue to next breakpoint\n"
             " Ctrl+T   Execute one source statement (step)\n"
+            " Ctrl+V   Inspect current variables while paused\n"
             " Ctrl+X   Stop debugging (does not undo DBF writes)\n"
             " F10      Exit (Ctrl+Q also works)\n"
             " Ctrl+Z   Undo recent edit\n"
@@ -575,6 +595,18 @@ private:
         }
     }
 
+    void inspect_variables() {
+        if (!debugging()) {
+            message_ = "Start debugging to inspect variables.";
+            return;
+        }
+        mode_ = mode_ == Mode::Variables ? Mode::Editor : Mode::Variables;
+        output_scroll_ = 0;
+        message_ = mode_ == Mode::Variables
+            ? "Variables are read-only. Ctrl+V or Esc returns to the editor."
+            : "Returned to editor.";
+    }
+
     void stop_debugging() {
         if (!debugging()) {
             message_ = "No debugger session running.";
@@ -664,6 +696,7 @@ private:
         case ctrl('B'): toggle_breakpoint(); return;
         case ctrl('D'): debug(false); return;
         case ctrl('T'): debug(true); return;
+        case ctrl('V'): inspect_variables(); return;
         case ctrl('X'): stop_debugging(); return;
         case KEY_F(1):
             mode_ = mode_ == Mode::Help ? Mode::Editor : Mode::Help;
@@ -759,7 +792,7 @@ int main(int argc, char** argv) {
         std::cout << "Usage: xabl-tui [program.prg|program.xabl]\n"
                   << "Terminal IDE (optional ncurses build).\n"
                   << "F1 Help, F2 Open, F3 New, F4 Save, F5 Run, F6 Output, F9 Check, F10 Exit.\n"
-                  << "Ctrl+B breakpoint, Ctrl+D debug/continue, Ctrl+T step, Ctrl+X stop.\n";
+                  << "Ctrl+B breakpoint, Ctrl+D debug/continue, Ctrl+T step, Ctrl+V variables, Ctrl+X stop.\n";
         return 0;
     }
     if (argc > 2) {
