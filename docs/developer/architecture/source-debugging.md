@@ -90,20 +90,24 @@ historical dBASE debugger and does not implement macro/source-span tracking.
 
 ## Text Studio keyboard integration (16 October 2026)
 
-Text Studio uses the shared VM and BreakpointMap directly. Ctrl+B toggles
-breakpoints on executable source lines, Ctrl+D begins/continues execution,
-Ctrl+T steps one statement, Ctrl+V shows a read-only sorted variable
-view using the existing output viewport, and Ctrl+X discards remaining
-execution.
-It uses the editor's current source buffer; no separate project, event loop,
-or debugger service is introduced. F5 Run and F9 Check are unchanged.
+The ncurses frontend directly uses the existing Vm and BreakpointMap;
+no separate debugger service or framework is introduced. Keyboard
+bindings now follow Borland/Free Pascal conventions:
 
-Paused statement and breakpoint gutter markers are visible; runtime output
-remains available with F6. Editing/opening another source is unavailable
-while paused; cancellation releases that lock. On a source edit, numbered
-breakpoints are cleared to avoid stale line offsets. The existing PTY
-integration test covers the keyboard controls.
+- Ctrl+F8: breakpoint. Ctrl+F9: run/continue. Ctrl+F2: stop/reset.
+- Ctrl+F7: variable snapshot; not a watch-expression editor.
+- F7 and F8: the same statement step until procedure calls need
+  distinct trace-into and step-over behaviour.
+- F4: run to cursor via a temporary breakpoint, without modifying
+  existing user breakpoints.
+- F9 and Alt+F9: compile the current source file only.
+- Alt+F5: output screen. F10: command-menu fallback.
 
-The curses frontend remains synchronous: continuing into a long-running
-program does not provide asynchronous interruption. Production/shared DBF
-debugging is not recommended because runtime writes are not transactional.
+Common xterm/Konsole modified F-key escape sequences are registered
+with ncurses define_key, but terminal configurations vary. The
+existing PTY test covers keys and menu access. Editor modifications,
+source switching and saving are blocked while a debug session is
+paused; editing after reset clears line-based breakpoints.
+
+The frontend is synchronous, so a long-running or looping statement
+cannot be interrupted while executing. DBF writes are not transactional.
