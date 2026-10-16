@@ -37,14 +37,52 @@ control-marker lines; `disable` is idempotent. Resolved offsets identify
 the first emitted instruction at a source line, preventing a repeated stop
 for each operand of an expression. Recreate the map on every compile.
 
-## Next integration requirements
+## Headless VM execution control (16 October 2026)
 
-Before wiring an IDE breakpoint key, provide a VM execution-control
-interface that reports source location at statement-entry offsets; supports
-step, continue and cancellation; and clearly distinguishes an inspected
-program from one explicitly authorised to run. Headless tests must cover
-loop revisits, error propagation, and deliberate table-write scripts in
-throwaway fixture directories. No breakpoints or watches may modify data.
+The VM is resumable without coupling execution to a terminal or Qt event loop.
+Typical API usage:
 
-The initial mapping does not claim compatibility with the original dBASE
-debugger, which varied across products and historical versions.
+    xabl::Program program = xabl::Compiler{}.compile(source);
+    xabl::BreakpointMap breakpoints(program);
+    breakpoints.enable(12);
+    std::ostringstream output;
+    xabl::Vm vm(output);
+    vm.begin(program, working_directory);  // does not execute anything
+    xabl::DebugStop reason = vm.resume(breakpoints);
+    if (reason == xabl::DebugStop::Breakpoint) {
+        const auto location = vm.debug_location(); // next statement
+        reason = vm.step();  // execute one source statement
+    }
+    vm.cancel_debugging();  // discard remaining execution, no rollback
+
+begin() validates the profile, resets the operand stack and instruction offset,
+and records the chosen directory. It does **not** open files or execute
+commands. resume() stops before enabled source breakpoints and bypasses a
+just-hit breakpoint once, including when a loop revisits the same source line.
+step() executes one *source statement* rather than one VM opcode. Expression
+evaluation (including embedded filter expressions) is part of its statement.
+debug_location() points at the next instruction, not the one just executed.
+
+The VM borrows the Program for an active session: keep it alive and unchanged
+until completion/cancellation. A BreakpointMap must be made for that exact
+compiled program. A breakpoint map for a different program is rejected before
+execution. A runtime instruction exception invalidates the debug session.
+Completed and cancelled sessions cannot be resumed until a new begin() call.
+
+Ordinary Vm::run() still runs synchronously to completion; it does not use
+the breakpoint index or pay per-instruction debugger lookup costs. The
+debugging API is headless and does not alter dBASE syntax or opcode behaviour.
+
+**Important:** Explicit resume() and step() may change DBF files if the
+program contains writable statements. cancel_debugging() only prevents
+*future* commands and cannot roll back statements already executed. This is
+not a read-only sandbox or transactional debugger. Use disposable DBF copies
+for debugging writable source. The debugger adds no multi-user record locking.
+
+## Further integration work
+
+Text Studio and the future Qt frontend still need keyboard actions, a
+visible paused-line indicator, variable inspection and a deliberate run
+confirmation before any writable script executes. There is no frontend
+debugger integration yet. Source mapping does not claim equivalence to the
+historical dBASE debugger and does not implement macro/source-span tracking.

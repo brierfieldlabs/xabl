@@ -5,7 +5,7 @@
 
 namespace xabl {
 
-BreakpointMap::BreakpointMap(const Program& program) {
+BreakpointMap::BreakpointMap(const Program& program) : program_(&program) {
     for (std::size_t i = 0; i < program.code.size(); ++i) {
         const Instruction& instruction = program.code[i];
         if (instruction.opcode != OpCode::Halt && instruction.source.line != 0) {
@@ -13,6 +13,10 @@ BreakpointMap::BreakpointMap(const Program& program) {
             source_to_instruction_.emplace(instruction.source.line, i);
         }
     }
+}
+
+bool BreakpointMap::matches(const Program& program) const noexcept {
+    return program_ == &program;
 }
 
 std::optional<std::size_t> BreakpointMap::instruction_at(

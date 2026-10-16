@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <iosfwd>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -23,6 +24,7 @@
 namespace xabl {
 
 class Program;
+class BreakpointMap;
 
 /// A legacy date value. All-zero components mean the historical blank date.
 /// Date values are distinct from character fields and numeric operands.
@@ -225,12 +227,42 @@ private:
     void load_header();
 };
 
+/// Why a resumable VM has returned to its caller.
+enum class DebugStop {
+    Breakpoint,  ///< Stopped before an enabled statement executes.
+    Step,        ///< One statement executed; next statement not yet executed.
+    Finished     ///< HALT reached or bytecode exhausted.
+};
+
 class Vm {
 public:
     /// Bind an executable runtime dialect and the program output stream.
     explicit Vm(std::ostream& output, CompatibilityProfile profile = {});
 
     void run(const Program& program, const std::filesystem::path& working_directory);
+
+    /// Prepare a debug session without executing bytecode or touching DBF files.
+    /// The caller must keep program alive and unchanged until the session finishes.
+    /// As with run(), existing variable and work-area state is retained.
+    void begin(const Program& program,
+               const std::filesystem::path& working_directory);
+
+    /// Execute until an enabled source breakpoint, or program completion.
+    /// An already-hit breakpoint is bypassed once when resuming.
+    /// The map must belong to this exact compiled Program.
+    [[nodiscard]] DebugStop resume(const BreakpointMap& breakpoints);
+
+    /// Execute one source statement and stop before the following statement.
+    /// Embedded FILTER expressions execute atomically as part of their command.
+    [[nodiscard]] DebugStop step();
+
+    /// Current next-to-execute instruction's source location, if available.
+    [[nodiscard]] std::optional<SourceLocation> debug_location() const noexcept;
+
+    [[nodiscard]] bool debugging() const noexcept;
+
+    /// Discard a paused session. Does not roll back effects already executed.
+    void cancel_debugging() noexcept;
 
     [[nodiscard]] const std::unordered_map<std::string, Value>& variables() const noexcept;
 
@@ -252,6 +284,14 @@ private:
     bool hide_deleted_{false};
     bool exact_{false};
 
+    // Source program is borrowed, not copied. Only valid between begin() and
+    // a Finished stop (or until run() returns); a thrown VM error ends it.
+    const Program* active_program_{nullptr};
+    std::filesystem::path debug_directory_{};
+    std::size_t instruction_pointer_{0};
+    bool skip_breakpoint_once_{false};
+
+    [[nodiscard]] DebugStop execute(const BreakpointMap* breakpoints, bool single_step);
     Value pop();
     [[nodiscard]] Value load_name(const std::string& name) const;
     [[nodiscard]] WorkArea& active_work_area();
