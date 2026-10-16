@@ -51,7 +51,7 @@ independent original-product reference files are still outstanding.
 - `USE` with no filename: close current work area's table, index, filter,
   FOUND state and alias, without closing another work area.
 - `SET INDEX TO` with no filenames: close current active NDX index.
-- `GO TOP`, `GO BOTTOM`, `GOTO BOTTOM` and `SKIP`:
+- GO / GOTO TOP, GO / GOTO BOTTOM, GO / GOTO numeric expression and SKIP:
   navigate NDX key order when indexed, physical order otherwise. Filters
   and global SET DELETED visibility compose with both modes; direct
   `GO n` still addresses physical record numbers. Extreme SKIP
