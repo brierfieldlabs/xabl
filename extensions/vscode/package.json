@@ -1,0 +1,95 @@
+{
+  "name": "xabl",
+  "displayName": "XABL Language",
+  "description": "XABL and dBASE-style source highlighting, compile checking and running with the shared XABL CLI.",
+  "version": "0.1.0",
+  "publisher": "brierfieldlabs",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brierfieldlabs/xabl.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "xabl",
+    "xbase",
+    "dbase",
+    "clipper"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:xabl"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "xabl",
+        "aliases": [
+          "XABL",
+          "xBase (XABL)"
+        ],
+        "extensions": [
+          ".xabl",
+          ".prg"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "xabl",
+        "scopeName": "source.xabl",
+        "path": "./syntaxes/xabl.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "xabl.check",
+        "title": "Check Current Source",
+        "category": "XABL"
+      },
+      {
+        "command": "xabl.run",
+        "title": "Run Current Source",
+        "category": "XABL"
+      }
+    ],
+    "configuration": {
+      "title": "XABL",
+      "properties": {
+        "xabl.executablePath": {
+          "type": "string",
+          "default": "xabl",
+          "scope": "machine-overridable",
+          "description": "Path to the XABL CLI on the extension host, or xabl when on PATH."
+        }
+      }
+    },
+    "taskDefinitions": [
+      {
+        "type": "xabl",
+        "required": [
+          "operation"
+        ],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": [
+              "check",
+              "run"
+            ],
+            "description": "XABL compiler task mode."
+          }
+        }
+      }
+    ]
+  }
+}
