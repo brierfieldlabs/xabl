@@ -7,6 +7,7 @@
 #include "syntax_highlight.hpp"
 
 #include <xabl/runtime/xabl.hpp>
+#include <xabl/runtime/debugger.hpp>
 
 #include <curses.h>
 #include <algorithm>
@@ -18,6 +19,7 @@
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -39,12 +41,15 @@ public:
         keypad(stdscr, TRUE);
         curs_set(1);
 #if defined(__unix__) || defined(__APPLE__)
-        // Ctrl+S / Ctrl+Q are IDE shortcuts. IXON would otherwise treat
-        // them as terminal XOFF/XON and freeze the visible screen.
-        // endwin() restores the terminal attributes saved by initscr().
+        // Let the IDE receive Ctrl+S/Q (otherwise XOFF/XON) and Ctrl+Z
+        // (otherwise terminal suspend). Curses restores the original
+        // terminal settings when the editor exits normally.
         termios mode{};
         if (tcgetattr(STDIN_FILENO, &mode) == 0) {
             mode.c_iflag &= static_cast<tcflag_t>(~(IXON | IXOFF));
+#if defined(VSUSP) && defined(_POSIX_VDISABLE)
+            mode.c_cc[VSUSP] = _POSIX_VDISABLE;
+#endif
             tcsetattr(STDIN_FILENO, TCSANOW, &mode);
         }
 #endif
@@ -101,7 +106,24 @@ private:
     std::size_t scroll_row_{};
     std::size_t scroll_column_{};
     std::size_t output_scroll_{};
+    std::set<std::size_t> breakpoint_lines_;
+    std::ostringstream debug_output_;
+    // Program and map must outlive the VM session borrowing their contents.
+    std::unique_ptr<xabl::Program> debug_program_;
+    std::unique_ptr<xabl::BreakpointMap> debug_breakpoints_;
+    std::unique_ptr<xabl::Vm> debug_vm_;
     bool active_{true};
+
+    [[nodiscard]] bool debugging() const noexcept {
+        return debug_vm_ && debug_vm_->debugging();
+    }
+
+    void reset_debugger() {
+        if (debug_vm_) debug_vm_->cancel_debugging();
+        debug_vm_.reset();
+        debug_breakpoints_.reset();
+        debug_program_.reset();
+    }
 
     static void paint(int y, int x, std::string_view text, int width) {
         if (y < 0 || x < 0 || width <= 0) return;
@@ -200,15 +222,22 @@ private:
 
         if (mode_ == Mode::Editor) {
             ensure_visible(viewport_rows, viewport_width);
+            const auto paused_at = debugging() ? debug_vm_->debug_location()
+                                                : std::nullopt;
             for (int visible = 0; visible < viewport_rows; ++visible) {
                 const std::size_t index = scroll_row_ + visible;
                 if (index >= document_.lines().size()) break;
                 std::ostringstream label;
                 label.width(4);
-                label << (index + 1) << " |";
-                attron(A_DIM);
+                const bool current = paused_at && paused_at->line == index + 1;
+                label << (index + 1)
+                      << (breakpoint_lines_.contains(index + 1) ? '*' : ' ')
+                      << (current ? '>' : '|');
+                if (current) attron(A_BOLD);
+                else attron(A_DIM);
                 paint(editor_top + visible, 0, label.str(), gutter_width);
-                attroff(A_DIM);
+                if (current) attroff(A_BOLD);
+                else attroff(A_DIM);
                 const auto& source = document_.lines()[index];
                 paint_source(editor_top + visible, source, viewport_width);
             }
@@ -249,13 +278,18 @@ private:
                << "  Line " << document_.cursor().row + 1
                << "  Col " << document_.cursor().column + 1
                << "  " << document_.lines().size() << " lines"
-               << (document_.dirty() ? "  * UNSAVED *" : "");
+               << (document_.dirty() ? "  * UNSAVED *" : "")
+               << (debugging() ? "  [DEBUG PAUSED]" : "")
+               << (breakpoint_lines_.empty()
+                       ? "" : "  BPs " + std::to_string(breakpoint_lines_.size()));
         bar(height - 3, status.str(), 2);
         bar(height - 2, " " + message_, 1);
         bar(height - 1,
             mode_ == Mode::Browser
                 ? " Arrows Move  Enter Open  Backspace Parent  Ctrl+O Path  Esc Editor"
-                : " F1 Help F2 Files F3 New F4 Save F5 Run F6 Out F7 Find F8 Err F9 Check F10 Exit",
+                : debugging()
+                    ? " Ctrl+B Breakpoint   Ctrl+T Step   Ctrl+D Continue   Ctrl+X Stop   F6 Output"
+                    : " F1 Help F2 Files F3 New F4 Save F5 Run F6 Out F9 Check F10 Exit | ^B BP ^D Debug ^T Step ^X Stop",
             2);
         if (mode_ == Mode::Editor) {
             curs_set(1);
@@ -283,14 +317,21 @@ private:
             " F6       Toggle the program output / editor screen\n"
             " F7       Find text (Ctrl+F); F8 next or error jump\n"
             " F9       Check syntax without executing any commands\n"
+            " Ctrl+B   Toggle a breakpoint on an executable line\n"
+            " Ctrl+D   Start debugging / continue to next breakpoint\n"
+            " Ctrl+T   Execute one source statement (step)\n"
+            " Ctrl+X   Stop debugging (does not undo DBF writes)\n"
             " F10      Exit (Ctrl+Q also works)\n"
             " Ctrl+Z   Undo recent edit\n"
             " Arrows   Navigate; Home/End and PgUp/PgDn supported\n"
             " Enter    New line; Tab inserts four spaces\n"
             " Esc      Return to the editor (and close browser)\n"
             "\n"
-            "WARNING: F5 runs your program. DBF commands may write data.\n"
-            "F9 is compile-only, suitable for checking code safely.\n"
+            "F5 and debugger step/continue can write DBF files.\n"
+            "Starting debug asks permission; compiling and breakpoints do not run.\n"
+            "The editor is read-only while debugger execution is paused.\n"
+            "Ctrl+X stops future instructions; prior DBF writes remain.\n"
+            "Gutter: * breakpoint, > next paused statement.\n"
             "\n"
             "Current scope: ASCII-oriented terminal editing, <= 1 MiB.\n"
             "Files preserve CRLF when opened from DOS/Windows sources.\n"
@@ -346,6 +387,8 @@ private:
         scroll_row_ = scroll_column_ = 0;
         mode_ = Mode::Editor;
         last_compile_error_line_.reset();
+        reset_debugger();
+        breakpoint_lines_.clear();
         message_ = "Opened " + path;
     }
 
@@ -391,6 +434,8 @@ private:
             browser_.reset();
             scroll_row_ = scroll_column_ = 0;
             last_compile_error_line_.reset();
+            reset_debugger();
+            breakpoint_lines_.clear();
             message_ = "Opened " + safe_title(selected.string());
             break;
         }
@@ -413,6 +458,8 @@ private:
         scroll_row_ = scroll_column_ = 0;
         mode_ = Mode::Editor;
         last_compile_error_line_.reset();
+        reset_debugger();
+        breakpoint_lines_.clear();
         message_ = "New source file.";
     }
 
@@ -443,6 +490,108 @@ private:
             return;
         }
         search(true);
+    }
+
+    void toggle_breakpoint() {
+        const std::size_t line = document_.cursor().row + 1;
+        if (breakpoint_lines_.contains(line)) {
+            breakpoint_lines_.erase(line);
+            if (debugging()) debug_breakpoints_->disable(line);
+            message_ = "Breakpoint removed from line " + std::to_string(line);
+            return;
+        }
+
+        // Compiling for a breakpoint is deliberately non-executing.
+        if (debugging()) {
+            if (!debug_breakpoints_->instruction_at(line)) {
+                message_ = "No executable statement on line " + std::to_string(line);
+                return;
+            }
+            debug_breakpoints_->enable(line);
+        } else {
+            const auto compiled = xabl::Compiler{}.compile(document_.text());
+            if (!xabl::BreakpointMap(compiled).instruction_at(line)) {
+                message_ = "No executable statement on line " + std::to_string(line);
+                return;
+            }
+        }
+        breakpoint_lines_.insert(line);
+        message_ = "Breakpoint set on line " + std::to_string(line);
+    }
+
+    void debug(bool step) {
+        if (!debugging()) {
+            if (!confirm("Start debugging? Program statements may change DBF files."))
+                return;
+            reset_debugger();
+            debug_output_.str({});
+            debug_output_.clear();
+            try {
+                debug_program_ = std::make_unique<xabl::Program>(
+                    xabl::Compiler{}.compile(document_.text()));
+                debug_breakpoints_ = std::make_unique<xabl::BreakpointMap>(
+                    *debug_program_);
+                for (const auto line : breakpoint_lines_)
+                    debug_breakpoints_->enable(line);
+                debug_vm_ = std::make_unique<xabl::Vm>(debug_output_);
+                const auto directory = document_.path().empty()
+                    ? fs::current_path() : fs::absolute(document_.path()).parent_path();
+                debug_vm_->begin(*debug_program_, directory);
+            } catch (const std::exception& e) {
+                reset_debugger();
+                message_ = std::string("Debugger not started: ") + e.what();
+                return;
+            }
+        }
+        try {
+            const auto reason = step ? debug_vm_->step()
+                                     : debug_vm_->resume(*debug_breakpoints_);
+            output_ = debug_output_.str();
+            output_scroll_ = 0;
+            if (reason == xabl::DebugStop::Finished) {
+                reset_debugger();
+                output_ += "\nProgram completed.\n";
+                mode_ = Mode::Output;
+                message_ = "Debugging completed. F6 for editor.";
+                return;
+            }
+            const auto location = debug_vm_->debug_location();
+            if (location) {
+                (void)document_.go_to_line(location->line);
+                mode_ = Mode::Editor;
+                message_ = std::string(reason == xabl::DebugStop::Breakpoint
+                              ? "Breakpoint before line " : "Stepped to line ")
+                         + std::to_string(location->line)
+                         + ". Ctrl+T step, Ctrl+D continue, Ctrl+X stop.";
+            } else {
+                mode_ = Mode::Editor;
+                message_ = "Debugger paused before unsourced bytecode.";
+            }
+        } catch (const std::exception& e) {
+            output_ = debug_output_.str() + "\nError: " + e.what() + "\n";
+            reset_debugger();
+            mode_ = Mode::Output;
+            message_ = "Debugging stopped after runtime error. F6 for editor.";
+        }
+    }
+
+    void stop_debugging() {
+        if (!debugging()) {
+            message_ = "No debugger session running.";
+            return;
+        }
+        output_ = debug_output_.str();
+        reset_debugger();
+        mode_ = Mode::Editor;
+        message_ = "Debugger stopped. Earlier database changes remain.";
+    }
+
+    static bool is_edit_key(int key) {
+        return (key >= 32 && key <= 126) ||
+            key == KEY_BACKSPACE || key == 127 || key == 8 ||
+            key == KEY_DC || key == ctrl('Z') ||
+            key == '\n' || key == '\r' || key == KEY_ENTER ||
+            key == '\t';
     }
 
     void compile(bool execute) {
@@ -504,7 +653,18 @@ private:
             }
             return;
         }
+        if (debugging() &&
+            (key == KEY_F(2) || key == ctrl('O') || key == KEY_F(3) ||
+             key == KEY_F(4) || key == ctrl('S') ||
+             key == KEY_F(5) || key == KEY_F(9))) {
+            message_ = "Ctrl+X stops debugging before opening, saving or compiling.";
+            return;
+        }
         switch (key) {
+        case ctrl('B'): toggle_breakpoint(); return;
+        case ctrl('D'): debug(false); return;
+        case ctrl('T'): debug(true); return;
+        case ctrl('X'): stop_debugging(); return;
         case KEY_F(1):
             mode_ = mode_ == Mode::Help ? Mode::Editor : Mode::Help;
             output_scroll_ = 0;
@@ -547,6 +707,15 @@ private:
             }
             return;
         }
+        const bool editing = is_edit_key(key);
+        if (editing && debugging()) {
+            message_ = "Editor paused: Ctrl+X to stop debugging before editing.";
+            return;
+        }
+        // Only clear breakpoints if the source actually changes, not on
+        // no-op Backspace, Delete or Undo.
+        const bool track_source = editing && !breakpoint_lines_.empty();
+        const std::string prior_source = track_source ? document_.text() : "";
         switch (key) {
         case KEY_UP: document_.move_up(); break;
         case KEY_DOWN: document_.move_down(); break;
@@ -576,6 +745,10 @@ private:
                 document_.insert(static_cast<char>(key));
             break;
         }
+        if (track_source && document_.text() != prior_source) {
+            breakpoint_lines_.clear();
+            message_ = "Source changed; breakpoints cleared.";
+        }
     }
 };
 
@@ -585,7 +758,8 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
         std::cout << "Usage: xabl-tui [program.prg|program.xabl]\n"
                   << "Terminal IDE (optional ncurses build).\n"
-                  << "F1 Help, F2 Open, F3 New, F4 Save, F5 Run, F6 Output, F9 Check, F10 Exit.\n";
+                  << "F1 Help, F2 Open, F3 New, F4 Save, F5 Run, F6 Output, F9 Check, F10 Exit.\n"
+                  << "Ctrl+B breakpoint, Ctrl+D debug/continue, Ctrl+T step, Ctrl+X stop.\n";
         return 0;
     }
     if (argc > 2) {
