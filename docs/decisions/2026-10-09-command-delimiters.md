@@ -40,4 +40,8 @@ quoted semicolons do not continue a statement. Unterminated
 continuation at end of file produces an explicit compiler error.
 The original dBASE III PLUS NOTE/* comment-continuation variation
 and same-line semicolon command separation remain unimplemented and
-tracked by issue #52. The change does not introduce a second parser.
+tracked by issue #52. In a follow-up, unquoted same-line separators
+were made explicit compile errors until they can be mapped and stepped
+separately in the debugger. This avoids silently creating malformed
+variable names while keeping the compiler and VM simple. The changes
+do not introduce a second parser.

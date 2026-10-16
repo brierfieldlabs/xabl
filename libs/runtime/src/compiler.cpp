@@ -51,17 +51,16 @@ struct LogicalSourceLine {
     std::size_t column{0};
 };
 
-// Recognise a terminal semicolon only outside quoted strings. Doubled quotes
-// and inline && comments have already been handled by the same source rules
-// used for ordinary, single-line statements.
-bool trailing_continuation(std::string_view source, std::size_t last) {
-    if (source[last] != ';') return false;
+// Find semicolons outside both quoted-string styles, respecting doubled
+// quote escapes. Only terminal continuation is implemented for now; the
+// first earlier separator must be rejected instead of silently misparsed.
+std::size_t first_unquoted_semicolon(std::string_view source) {
     char quote = 0;
-    for (std::size_t i = 0; i <= last; ++i) {
+    for (std::size_t i = 0; i < source.size(); ++i) {
         const char c = source[i];
         if (quote != 0) {
             if (c == quote) {
-                if (i + 1 <= last && source[i + 1] == quote) {
+                if (i + 1 < source.size() && source[i + 1] == quote) {
                     ++i;
                 } else {
                     quote = 0;
@@ -69,9 +68,11 @@ bool trailing_continuation(std::string_view source, std::size_t last) {
             }
         } else if (c == '\'' || c == '"') {
             quote = c;
+        } else if (c == ';') {
+            return i;
         }
     }
-    return quote == 0;
+    return std::string_view::npos;
 }
 
 bool read_statement(std::istream& input, std::size_t& physical_line,
@@ -100,11 +101,17 @@ bool read_statement(std::istream& input, std::size_t& physical_line,
 
         const auto last = part.find_last_not_of(" \t\r\n");
         const bool more = last != std::string::npos &&
-                          trailing_continuation(part, last);
+                          part[last] == ';' &&
+                          first_unquoted_semicolon(part.substr(0, last + 1)) == last;
         if (more) part.erase(last, 1);
         result.text += part;
         if (!more) {
             result.text = trim(result.text);
+            if (first_unquoted_semicolon(result.text) != std::string::npos) {
+                throw std::runtime_error("line " + std::to_string(result.line) +
+                                         ": same-line semicolon statement separators "
+                                         "are not yet supported");
+            }
             return true;
         }
         continued = true;
