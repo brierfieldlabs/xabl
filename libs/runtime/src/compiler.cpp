@@ -123,6 +123,21 @@ bool read_statement(std::istream& input, std::size_t& physical_line,
     return false;
 }
 
+// STORE and bare assignments write memory variables, not arbitrary source
+// fragments. Match the simple names accepted by the expression lexer.
+// Historical length/codepage limits belong in a later dialect-specific pass.
+bool valid_variable_name(std::string_view name) {
+    if (name.empty()) return false;
+    const auto letter = [](unsigned char c) {
+        return std::isalpha(c) != 0 || c == '_';
+    };
+    const auto rest = [&](unsigned char c) {
+        return letter(c) || std::isdigit(c) != 0;
+    };
+    return letter(static_cast<unsigned char>(name.front())) &&
+           std::all_of(name.begin() + 1, name.end(), rest);
+}
+
 // Locate command separators such as " TO " without mistaking matching
 // words inside strings or nested parenthesised function expressions.
 std::size_t find_command_marker(std::string_view source,
@@ -419,8 +434,8 @@ Program Compiler::compile(std::string_view source) const {
                 expression_compiler.emit(remainder.substr(0, to_pos));
                 const std::string variable =
                     trim(remainder.substr(to_pos + marker.size()));
-                if (variable.empty()) {
-                    throw std::runtime_error("STORE requires a variable name");
+                if (!valid_variable_name(variable)) {
+                    throw std::runtime_error("STORE requires one valid variable name");
                 }
                 program.code.push_back({OpCode::StoreName, {}, upper(variable)});
                 continue;
@@ -578,8 +593,8 @@ Program Compiler::compile(std::string_view source) const {
             if (assignment != std::string::npos) {
                 const std::string variable = trim(line.substr(0, assignment));
                 const std::string expression = line.substr(assignment + 1);
-                if (variable.empty() || expression.empty()) {
-                    throw std::runtime_error("invalid assignment");
+                if (!valid_variable_name(variable) || trim(expression).empty()) {
+                    throw std::runtime_error("invalid assignment target or expression");
                 }
                 expression_compiler.emit(expression);
                 program.code.push_back({OpCode::StoreName, {}, upper(variable)});
