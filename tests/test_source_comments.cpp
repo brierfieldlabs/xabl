@@ -69,13 +69,17 @@ int main(int argc, char** argv) {
         assignment_vm.run(compiler.compile(
             "STORE 7 TO _counter2\n"
             "result_3 = _counter2 + 1\n"
-            "? result_3\n"), ".");
-        if (assigned.str() != "8\n") {
+            "STORE result_3 + 2 TO rate, towing, _hours\n"
+            "? result_3\n"
+            "? rate\n"
+            "? towing\n"
+            "? _hours\n"), ".");
+        if (assigned.str() != "8\n10\n10\n10\n") {
             throw std::runtime_error("valid memory-variable assignment failed");
         }
         for (std::string_view malformed : {
                  "2total = 5", "a + b = 5", "a.b = 5",
-                 "STORE 1 TO a,b", "STORE 2 TO a b",
+                 "STORE 1 TO a,,b", "STORE 1 TO a,", "STORE 2 TO a b",
                  "STORE 3 TO table->field"
              }) {
             bool rejected = false;

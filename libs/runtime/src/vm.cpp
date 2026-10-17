@@ -18,6 +18,7 @@
 #include <limits>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 
 namespace xabl {
 Vm::Vm(std::ostream& output, CompatibilityProfile profile)
@@ -113,10 +114,18 @@ DebugStop Vm::execute(const BreakpointMap* breakpoints, bool single_step) {
             ++ip;
             break;
 
-        case OpCode::StoreName:
-            variables_[upper(instruction.text)] = pop();
+        case OpCode::StoreName: {
+            const Value value = pop();
+            std::string_view names = instruction.text;
+            while (!names.empty()) {
+                const auto comma = names.find(',');
+                variables_[std::string(names.substr(0, comma))] = value;
+                if (comma == std::string_view::npos) break;
+                names.remove_prefix(comma + 1);
+            }
             ++ip;
             break;
+        }
 
         case OpCode::SelectArea: {
             const std::string selector = trim(instruction.text);
