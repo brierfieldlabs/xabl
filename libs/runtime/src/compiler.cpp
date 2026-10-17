@@ -453,13 +453,27 @@ Program Compiler::compile(std::string_view source) const {
                     throw std::runtime_error("STORE requires TO");
                 }
 
-                expression_compiler.emit(remainder.substr(0, to_pos));
-                const std::string variable =
+                // dBASE III PLUS STORE accepts comma-separated memory
+                // variables. Validate the whole list before emitting code,
+                // then evaluate the expression only once in the VM.
+                const std::string targets =
                     trim(remainder.substr(to_pos + marker.size()));
-                if (!valid_variable_name(variable)) {
-                    throw std::runtime_error("STORE requires one valid variable name");
+                std::string names;
+                std::size_t start = 0;
+                while (true) {
+                    const auto comma = targets.find(',', start);
+                    const std::string variable = trim(targets.substr(
+                        start, comma == std::string::npos ? comma : comma - start));
+                    if (!valid_variable_name(variable)) {
+                        throw std::runtime_error("STORE requires valid variable names");
+                    }
+                    if (!names.empty()) names += ',';
+                    names += upper(variable);
+                    if (comma == std::string::npos) break;
+                    start = comma + 1;
                 }
-                program.code.push_back({OpCode::StoreName, {}, upper(variable)});
+                expression_compiler.emit(remainder.substr(0, to_pos));
+                program.code.push_back({OpCode::StoreName, {}, names});
                 continue;
             }
 

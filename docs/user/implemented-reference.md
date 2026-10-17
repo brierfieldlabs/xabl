@@ -32,7 +32,7 @@ each command.
 | --- | --- |
 | `* comment`, `NOTE comment`, `&& comment` | Full-line comments; quote-aware inline `&&` supported |
 | `? expression`, `?expression`, `?` | Print expression with a newline, or an empty line |
-| `STORE expression TO name` | Store a value in a named variable |
+| `STORE expression TO name[,name...]` | Evaluate once and assign to one or more comma-separated memory variables |
 | `name = expression` | Assign to a named variable |
 | `IF expression` / `ELSE` / `ENDIF` | Conditional, optional ELSE, nested blocks |
 | `DO CASE` / `CASE expression` / `OTHERWISE` / `ENDCASE` | First true CASE wins; optional OTHERWISE |
