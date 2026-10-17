@@ -77,6 +77,7 @@ enum class OpCode {
     RecallRecord,
     ReplaceField,
     Print,
+    PrintInline,
     UnaryNot,
     LogicalAnd,
     LogicalOr,

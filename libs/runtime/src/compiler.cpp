@@ -411,6 +411,20 @@ Program Compiler::compile(std::string_view source) const {
                 continue;
             }
 
+            if (line.starts_with("??")) {
+                // DOS-era ?? writes on the current line, unlike ?.
+                // This subset accepts one expression, or an empty ??.
+                const std::string expression = trim(line.substr(2));
+                if (expression.empty()) {
+                    program.code.push_back(
+                        {OpCode::PushLiteral, Value(std::string{})});
+                } else {
+                    expression_compiler.emit(expression);
+                }
+                program.code.push_back({OpCode::PrintInline});
+                continue;
+            }
+
             if (line.front() == '?') {
                 if (line == "?") {
                     // A bare ? emits a blank output line.

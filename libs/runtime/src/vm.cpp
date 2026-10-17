@@ -491,6 +491,11 @@ DebugStop Vm::execute(const BreakpointMap* breakpoints, bool single_step) {
             ++ip;
             break;
 
+        case OpCode::PrintInline:
+            output_ << pop().as_string();
+            ++ip;
+            break;
+
         case OpCode::UnaryNot:
             stack_.push_back(Value(!pop().as_logical()));
             ++ip;

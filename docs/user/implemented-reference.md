@@ -55,6 +55,10 @@ each command.
 | `REPLACE field WITH expression` | Update one field in the current record |
 | `DELETE` / `RECALL` | Set/clear current record's deletion flag |
 
+The compact output form with two question marks emits one expression
+without a trailing newline. Full dBASE expression-list formatting
+and screen/printer controls remain out of scope for this slice.
+
 Source statements normally end at a newline. A trailing semicolon outside
 strings continues onto the next physical line, including when `&&` follows
 the semicolon. Multiple semicolon-separated commands **on the same physical
