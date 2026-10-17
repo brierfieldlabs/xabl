@@ -158,7 +158,9 @@ ENDDO
                  "DO CASE\nCASE .T.\nOTHERWISE\nOTHERWISE\nENDCASE",
                  "DO CASE\nCASE .T.\nOTHERWISE\nCASE .F.\nENDCASE",
                  "DO CASE\nCASE .T.\nENDIF",
-                 "DO CASE\nCASE .T.\nDO WHILE .F.\nENDCASE"}) {
+                 "DO CASE\nCASE .T.\nDO WHILE .F.\nENDCASE",
+                 "DO CASE\n? 'unconditional'\nCASE .T.\n? 'ok'\nENDCASE",
+                 "DO CASE\nDO CASE\nCASE .T.\n? 'nested'\nENDCASE\nCASE .T.\nENDCASE"}) {
             reject(bad);
         }
 

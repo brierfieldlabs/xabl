@@ -31,3 +31,13 @@ branch executes. With no matching CASE and no OTHERWISE, nothing runs.
 Nested cases use the existing control-block stack and VM jump opcodes,
 without a separate interpreter subsystem. Regression coverage lives
 in the existing control-flow suite. Linked to issue #52.
+
+
+## Follow-up: CASE selector ordering (17 October 2026)
+
+A DO CASE block must start with CASE before containing executable
+statements or another nested block. Previously such statements compiled
+outside any branch and could run unconditionally. The existing compiler
+block stack now rejects this malformed source explicitly. Comments and
+blank lines remain valid before the first CASE. Existing control-flow
+tests cover these cases; no extra VM opcode or test suite was required.
