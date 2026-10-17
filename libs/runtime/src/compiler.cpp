@@ -263,6 +263,14 @@ Program Compiler::compile(std::string_view source) const {
         try {
             StatementSourceScope statement{program, program.code.size(),
                                            {source_line.line, source_line.column}};
+            // A DO CASE block cannot execute statements before its first
+            // CASE selector: they would run unconditionally.
+            if (!blocks.empty() && blocks.back().kind == Block::Kind::DoCase &&
+                !blocks.back().has_case &&
+                !equal_ci(line, "CASE") && !starts_with_ci(line, "CASE ") &&
+                !equal_ci(line, "ENDCASE") && !equal_ci(line, "OTHERWISE")) {
+                throw std::runtime_error("DO CASE requires CASE before statements");
+            }
             if (equal_ci(line, "USE")) {
                 program.code.push_back({OpCode::CloseTable});
                 continue;
