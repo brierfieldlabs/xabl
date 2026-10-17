@@ -10,6 +10,8 @@ independent original-product reference files are still outstanding.
 - PRG line comments starting with `*`, `NOTE` and `&&`; inline
   `&&` comments are stripped without damaging quoted literals. Bare
   `?` prints a blank line, while `?expression` works without a space.
+  Double question-mark output (?? expression) writes one expression
+  without a newline; full legacy expression-list formatting is pending.
   Trailing semicolons outside quoted literals continue a statement
   onto following physical lines, including before a trailing inline
   && comment. Continuation-only lines do not create new breakpoint

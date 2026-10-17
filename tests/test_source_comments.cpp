@@ -33,6 +33,22 @@ int main(int argc, char** argv) {
                                      output.str());
         }
 
+        // The classic ?? form emits no newline and keeps ordinary
+        // expression evaluation; ?? by itself emits no text.
+        std::ostringstream inline_output;
+        xabl::Vm inline_vm(inline_output);
+        inline_vm.run(compiler.compile(
+            "?? 'HEL'\n"
+            "?? 'LO'\n"
+            "??\n"
+            "?\n"
+            "? 'NEXT'\n"
+            "?? 2 + 3\n"), ".");
+        if (inline_output.str() != "HELLO\nNEXT\n5") {
+            throw std::runtime_error("?? inline print output mismatch: " +
+                                     inline_output.str());
+        }
+
         // The lexer must preserve a quoted && even when doubled-delimiter
         // escaping occurs on both single- and double-quoted strings.
         std::ostringstream quotes;
