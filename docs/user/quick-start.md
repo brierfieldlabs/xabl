@@ -99,3 +99,6 @@ For the implemented subset and known gaps, see
 Development requests and next steps belong in
 [GitHub Issues](https://github.com/brierfieldlabs/xabl/issues),
 particularly [documentation issue #63](https://github.com/brierfieldlabs/xabl/issues/63).
+
+For the precise currently supported commands and functions, see the
+[implemented language reference](implemented-reference.md).
