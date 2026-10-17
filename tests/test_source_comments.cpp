@@ -46,6 +46,34 @@ int main(int argc, char** argv) {
             throw std::runtime_error("quoted comment handling mismatch");
         }
 
+        // STORE and simple assignment may only target lexer-style
+        // memory-variable identifiers, not arbitrary left-hand text.
+        std::ostringstream assigned;
+        xabl::Vm assignment_vm(assigned);
+        assignment_vm.run(compiler.compile(
+            "STORE 7 TO _counter2\n"
+            "result_3 = _counter2 + 1\n"
+            "? result_3\n"), ".");
+        if (assigned.str() != "8\n") {
+            throw std::runtime_error("valid memory-variable assignment failed");
+        }
+        for (std::string_view malformed : {
+                 "2total = 5", "a + b = 5", "a.b = 5",
+                 "STORE 1 TO a,b", "STORE 2 TO a b",
+                 "STORE 3 TO table->field"
+             }) {
+            bool rejected = false;
+            try { (void)compiler.compile(malformed); }
+            catch (const std::runtime_error& ex) {
+                rejected = std::string(ex.what()).find("line 1:") !=
+                           std::string::npos;
+            }
+            if (!rejected) {
+                throw std::runtime_error("invalid variable target accepted: " +
+                                         std::string(malformed));
+            }
+        }
+
         // Semicolon continuation is resolved after && comments, and
         // ordinary quoted semicolons are never continuation markers.
         std::ostringstream continued;

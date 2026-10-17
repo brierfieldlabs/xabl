@@ -16,6 +16,11 @@ independent original-product reference files are still outstanding.
   locations. Multiple statements separated by semicolons on one
   physical line are not yet implemented and now fail explicitly,
   rather than being mistaken for parts of a variable or expression.
+- Memory-variable STORE and bare assignments accept simple identifier
+  targets (letters/underscore, followed by letters/digits/underscore).
+  Invalid target text is rejected rather than silently stored under a
+  malformed name. This is parser consistency, not a claim that historical
+  dialect-specific variable-name length limits are fully implemented.
 - STORE TO, REPLACE WITH and USE ALIAS separators are now recognised
   outside quoted character expressions and parenthesised calls; embedded
   keyword text is retained as a literal, not a spurious clause.
