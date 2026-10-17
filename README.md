@@ -63,5 +63,6 @@ GPL-3.0-or-later.
 
 ## Documentation
 
-Start with the [quick start](docs/user/quick-start.md).
+Start with the [quick start](docs/user/quick-start.md) and
+[implemented command/function reference](docs/user/implemented-reference.md).
 See `docs/developer/architecture/xabl-design-decisions.md` for the current design record.
